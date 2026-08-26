@@ -1,0 +1,15 @@
+[gd_scene format=3 uid="uid://ct615e38jpvt8"]
+
+[ext_resource type="Script" uid="uid://cj3dft13o5m5h" path="res://scripts/barrier.gd" id="1_8ilpk"]
+[ext_resource type="Script" uid="uid://ciuom6iihcriy" path="res://scripts/health_component.gd" id="2_dlnxh"]
+
+[node name="Barrier" type="StaticBody2D" unique_id=756127167]
+script = ExtResource("1_8ilpk")
+
+[node name="HealthComponent" type="Node" parent="." unique_id=1919791101 node_paths=PackedStringArray("body")]
+script = ExtResource("2_dlnxh")
+body = NodePath("..")
+metadata/_custom_type_script = "uid://ciuom6iihcriy"
+
+[node name="Polygon2D" type="Polygon2D" parent="." unique_id=1106527578]
+color = Color(0, 0.6039216, 0.6039216, 1)
