@@ -226,8 +226,6 @@ func spawn_boids(num:int, rect:Rect2):
 		selection[i].position = Vector2(randf_range(rect.position.x, rect.size.x), randf_range(rect.position.y, rect.size.y))
 		selection[i].multimesh_index = boid_num + i
 		
-		#im actually not sure if this is doing anything
-		selection[i].set_physics_process(false)
 		
 		
 		

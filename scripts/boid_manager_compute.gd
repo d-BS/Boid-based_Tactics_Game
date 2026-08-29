@@ -3,14 +3,50 @@ var DEBUG_LOG = false
 
 var NUM_BOIDS:int = 20000
 
+
+#TODO:
+#
+#Have initial boids in squads[1], keep squads[0] empty a very start
+#Have goal-less boids removed from squad structure overall?
+#
+#Fix abberant boids
+#Abberant boid behavior alternates on select?!? Why!?!
+#
+#Figure out why some boids are slightly faster than others.
+#Keep this behavior, just figure out WHY it happens, and assign tune-able variable to it
+#
+#Add formation structure, replace squad_bias (replace bias_loc?)
+#
+#Make NUM_BOIDS dynamic rather than hardcoded
+#(Add in MAX_BOIDS, and only update texture/arrays when passed?)
+#
+#Have 'collisions' dependent on velocity mag + dir of colliding boid
+#in order to make it more realistic, and less 'bouncy'
+#(MAYBE, test in cpu imp first)
+#
+#Binning: Boids only check their own bin, and bins orthoganal to them
+#Bins have side len vision_radius
+#to get bin # for each boid, we:
+#vec2i bin_pair = int(pos / vision_rad)
+#
+#bin_pair.x = bin_pair.x < 0 ? 2 * -bin_pair.x - 1 : 2 * bin_pair.x
+#(same w y)
+#
+#int bin_num = (x + y) * (x + y + 1) / 2 + y
+#
+#bin_list.insert_at(bin_list.bsearch(bin_num), vec2(bin_num, boid_id))
+#
+#
+
 #buffers-to-be
 var boid_pos:PackedVector2Array = []
 var boid_vel:PackedVector2Array = []
 var bias_locations:PackedVector2Array = []
 var squad_biases:PackedVector2Array = []
 
-#turn into packed byte array later?
-var is_selected:Array[bool]
+#turn into packed byte array later? -> turn into squad_color
+#var is_selected:Array[bool]
+var squad_color:Array[Color]
 
 ## contains positions of boids, and is actively updated
 var boid_pos_active:PackedColorArray = []
@@ -65,6 +101,7 @@ class Squad:
 	
 	var goal: Vector2 = Vector2.INF
 	var squad_bias: Vector2 = Vector2.ZERO
+	var color:Color
 	
 	#static var squad_bias_min: float = 500
 	#static var squad_bias_min_squared: float = squad_bias_min * squad_bias_min
@@ -76,17 +113,27 @@ class Squad:
 	
 	var appx_location:Vector2 = Vector2.ZERO
 	
-	func _init(new_units:Array[int], squad_num:int = 0):
+	func _init(new_units:Array[int], squad_num:int = 0, new_goal:Vector2 = Vector2.INF, new_color:Color = Color.WHITE):
 		
 		#loops through and lets each unit know where it is in the squad
 		for i in new_units.size():
 			
 			boid_manager.squad_indeces[new_units[i]] = Vector2(squad_num, i)
 			
+			boid_manager.squad_color[new_units[i]] = new_color
+			
+			#if squadnum == 0, color = ugly blue, else random oklab
+			#Color.SKY_BLUE
+			#boid_manager.squadcolor[i] = squad color
+			
+		
+		goal = new_goal
+		color = new_color
 		
 		num_of_squads += 1
 		squad_id = squad_num
 		units = new_units
+		
 		
 		pass
 	
@@ -94,8 +141,8 @@ class Squad:
 		
 		
 		
-		#boid_manager.squad_biases[units[index]] = Vector2.ZERO
-		#boid_manager.bias_locations[units[index]] = Vector2.INF
+		boid_manager.squad_biases[units[index]] = Vector2.ZERO
+		boid_manager.bias_locations[units[index]] = Vector2.INF
 		boid_manager.squad_indeces[units[index]] = Vector2.ZERO
 		
 		#should swap toremove w back
@@ -105,6 +152,8 @@ class Squad:
 		boid_manager.squad_indeces[units[index]].y = index
 		units.pop_back()
 		
+		if(units.is_empty()):
+			num_of_squads -= 1
 		
 		pass
 	
@@ -211,15 +260,21 @@ func _ready():
 	squad_biases.fill(Vector2.ZERO)
 	
 	#REMEMBER TO CHANGE IN GDSHADER
-	is_selected.resize(20000)
-	is_selected.fill(false)
+	#is_selected.resize(20000)
+	#is_selected.fill(false)
+	
+	squad_color.resize(20000)
+	squad_color.fill(Color.BLACK)
+	
+	
 	
 	_generate_boids()
 	
 	
 	$boid_particles.amount = NUM_BOIDS
 	$boid_particles.process_material.set_shader_parameter("boid_data", boid_data_texture)
-	$boid_particles.process_material.set_shader_parameter("is_selected", is_selected)
+	#$boid_particles.process_material.set_shader_parameter("is_selected", is_selected)
+	$boid_particles.process_material.set_shader_parameter("colors", squad_color)
 	
 	#DANGER (potentially?)
 	$boid_particles.visibility_rect = Rect2(-Vector2.INF, Vector2.INF)
@@ -232,6 +287,10 @@ func _ready():
 		_update_boids_gpu(0)
 	
 	
+	
+	#destroys the now-useless buffers
+	boid_pos = []
+	boid_vel = []
 	
 
 func _generate_boids():
@@ -307,6 +366,7 @@ func _update_boids_gpu(delta):
 	rd.compute_list_bind_compute_pipeline(compute_list, pipeline)
 	rd.compute_list_bind_uniform_set(compute_list, uniform_set, 0)
 	
+	#DANGER not really actually, im just not sure if 128 is the right number
 	rd.compute_list_dispatch(compute_list, ceil(NUM_BOIDS/128.), 1, 1)
 	rd.compute_list_end()
 	rd.submit()
@@ -411,6 +471,10 @@ func _generate_parameter_buffer(delta):
 func _exit_tree():
 	if SIMULATE_GPU:
 		_sync_boids_gpu()
+		
+		
+		#DANGER -> for some reason if this isnt commented out i get an error
+		#upon reloading the scene
 		#rd.free_rid(uniform_set)
 		rd.free_rid(boid_data_buffer)
 		rd.free_rid(params_buffer)
@@ -438,12 +502,14 @@ func set_selected_bias(new_bias:Vector2):
 
 func select_boids(new_selection:Array[int]):
 	
-	is_selected.fill(false)
+	#is_selected.fill(false)
 	
-	for b in new_selection:
+	#remeves selected boids from whatever squads they were in
+	for b:int in new_selection:
+	
 		
 		#b is now selected
-		is_selected[b] = true
+		#is_selected[b] = true
 		
 		var squad_getting_removed_from:int = int(squad_indeces[b].x)
 		
@@ -455,7 +521,7 @@ func select_boids(new_selection:Array[int]):
 		#if b's squad is now empty, adds to empty_squads
 		if squad_getting_removed_from != 0 && squads[squad_getting_removed_from].units.is_empty():
 			empty_squads.insert(empty_squads.bsearch(squad_getting_removed_from), squad_getting_removed_from)
-			Squad.num_of_squads -= 1
+			
 		
 	
 	#removes any remaining boids from selection squad
@@ -463,6 +529,18 @@ func select_boids(new_selection:Array[int]):
 	
 	#new_selection is selection squad now
 	squads[0] = Squad.new(new_selection)
+	
+	
+	
+	#updates the bias
+	#I bet this is causing the abberant boids, or at least a part of the cause
+	rd.free_rid(boid_bias_loc_buffer)
+	boid_bias_loc_buffer = _generate_vec2_buffer(bias_locations)
+	var boid_bias_loc_uniform = _generate_uniform(boid_bias_loc_buffer, RenderingDevice.UNIFORM_TYPE_STORAGE_BUFFER, 2)
+	bindings[2] = boid_bias_loc_uniform
+	
+	
+	
 	
 	#clears any back bloat
 	while !empty_squads.is_empty() && empty_squads.back() == squads.size() - 1:
@@ -474,7 +552,7 @@ func select_boids(new_selection:Array[int]):
 	
 	
 	#colors selected boids
-	$boid_particles.process_material.set_shader_parameter("is_selected", is_selected)
+	$boid_particles.process_material.set_shader_parameter("color", squad_color)
 	
 	pass
 
@@ -485,18 +563,20 @@ func deselect_boids():
 	if squads[0].units.is_empty():
 		return
 	
+	var new_color: Color = Color.from_ok_hsl(randf(), .8, .8)
+	
 	#moves selection squad from [0] to either end or first empty
 	if empty_squads.is_empty():
 		
 		#append new squad to end of squads
 		
-		squads.append(Squad.new(squads[0].units, squads.size()))
+		squads.append(Squad.new(squads[0].units, squads.size(), squads[0].goal, new_color))
 		
 		
 		pass
 	else:
 		
-		squads[empty_squads[0]] = Squad.new(squads[0].units, empty_squads[0])
+		squads[empty_squads[0]] = Squad.new(squads[0].units, empty_squads[0], squads[0].goal, new_color)
 		empty_squads.pop_front()
 		
 		pass

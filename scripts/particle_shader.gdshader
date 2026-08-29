@@ -1,5 +1,6 @@
 shader_type particles;
-uniform bool[20000] is_selected;
+//uniform bool[20000] is_selected;
+uniform vec4[20000] colors;
 uniform sampler2D boid_data;
 uniform float scale = .5;
 
@@ -14,18 +15,20 @@ void process() {
 	//mat2 scale_rot_mat = mat2(vec2(cos(boid_pos_rot.b), sin(boid_pos_rot.b)), // First column
 	//						  vec2(-sin(boid_pos_rot.b), cos(boid_pos_rot.b))); // Second column
 	//scale_rot_mat *= scale;
-	//TRANSFORM[0].xy = scale_rot_mat[0];
-	//TRANSFORM[1].xy = scale_rot_mat[1];
+	TRANSFORM[0].xy = vec2(scale, 0);
+	TRANSFORM[1].xy = vec2(0, scale);
 	TRANSFORM[3].xy = vec2(boid_pos.r, boid_pos.g); 
 	
 	
 	//highlights 'dead' boids
 	if (INDEX < uint(94))
 		COLOR = vec4(1, 0, 0, 1);
-	
-	
-	else if (is_selected[INDEX])
-		COLOR = vec4(0.5294118, 0.80784315, 0.92156863, 1);
 	else
-		COLOR = vec4(0, 0, 0, 1);
+		COLOR = colors[INDEX];
+	
+	
+	//else if (is_selected[INDEX])
+	//	COLOR = vec4(0.5294118, 0.80784315, 0.92156863, 1);
+	//else
+	//	COLOR = vec4(0, 0, 0, 1);
 }

@@ -117,15 +117,15 @@ void main() {
 
 
 	//this causes the larger slow ones, for some reason
+	//aha! its because with alignment, the avg vel is ADDED to the vel, meaning groups are faster!
 	if (num_neighbors > 0){
 
 		//why the - velocity ?????!?
-		//velocity += (average_velocity / num_neighbors - velocity) * params.alignment_factor * params.delta_time;
+		//dont use this one//velocity += (average_velocity / num_neighbors - velocity) * params.alignment_factor * params.delta_time;
 		velocity += (average_velocity / num_neighbors) * params.alignment_factor * params.delta_time;
 
 		//applies average position
 		velocity += (average_position / num_neighbors - position) * params.cohesion_factor * params.delta_time;
-		//velocity += (average_position / num_neighbors) * params.cohesion_factor * params.delta_time;
 	}
 
 
@@ -141,9 +141,11 @@ void main() {
 
 		vec2 bias = bias_location - position;
 
+		//magic
 		if(dot(bias, bias) > 2500){
 
 			//formerly 20
+			//magic
 			bias = normalize(bias) * 15;
 
 		}
