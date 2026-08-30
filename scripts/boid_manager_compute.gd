@@ -1,16 +1,16 @@
 extends Node2D
 var DEBUG_LOG = false
 
-var NUM_BOIDS:int = 20000
+var NUM_BOIDS:int = 20096
+
+
+#scale was 1.5 while 16 x 16
 
 
 #TODO:
 #
 #Have initial boids in squads[1], keep squads[0] empty a very start
 #Have goal-less boids removed from squad structure overall?
-#
-#Fix abberant boids
-#Abberant boid behavior alternates on select?!? Why!?!
 #
 #Figure out why some boids are slightly faster than others.
 #Keep this behavior, just figure out WHY it happens, and assign tune-able variable to it
@@ -37,12 +37,24 @@ var NUM_BOIDS:int = 20000
 #bin_list.insert_at(bin_list.bsearch(bin_num), vec2(bin_num, boid_id))
 #
 #
+#
+#
+#
+#
+#
+#Optimizations for later:
+#
+#Convert vec2 arrays to vec2i arrays / int arrays twice as long
+#
+#
 
 #buffers-to-be
 var boid_pos:PackedVector2Array = []
 var boid_vel:PackedVector2Array = []
 var bias_locations:PackedVector2Array = []
 var squad_biases:PackedVector2Array = []
+## Stores bin #, boid id #
+var bin_list:PackedVector2Array = []
 
 #turn into packed byte array later? -> turn into squad_color
 #var is_selected:Array[bool]
@@ -183,9 +195,9 @@ class Squad:
 		#makes sure only one squad does work per frame
 		var productive:bool = (Engine.get_frames_drawn() + squad_id) % num_of_squads == 0
 		
-		
-		
-		if(goal != Vector2.INF && productive):
+		if(goal == Vector2.INF):
+			squad_bias = Vector2.ZERO
+		elif(productive):
 			
 			squad_bias = goal - appx_location
 			
@@ -203,8 +215,6 @@ class Squad:
 			#magic number!!
 			squad_bias = squad_bias.normalized() * 1000
 			
-		else:
-			squad_bias = Vector2.ZERO
 		
 		var new_location: Vector2 = Vector2.ZERO
 		
@@ -263,7 +273,7 @@ func _ready():
 	#is_selected.resize(20000)
 	#is_selected.fill(false)
 	
-	squad_color.resize(20000)
+	squad_color.resize(20096)
 	squad_color.fill(Color.BLACK)
 	
 	
@@ -349,8 +359,10 @@ func _draw() -> void:
 	
 	for s in squads:
 		
-		draw_circle(s.appx_location, 10, Color.GREEN)
-		draw_circle(s.goal, 10, Color.RED)
+		if(!is_inf(s.goal.x)):
+			draw_line(s.goal, s.appx_location, Color.GREEN, 30)
+		#draw_circle(s.appx_location, 10, Color.GREEN)
+		#draw_circle(s.goal, 10, Color.RED)
 		
 	
 	pass
@@ -367,7 +379,9 @@ func _update_boids_gpu(delta):
 	rd.compute_list_bind_uniform_set(compute_list, uniform_set, 0)
 	
 	#DANGER not really actually, im just not sure if 128 is the right number
-	rd.compute_list_dispatch(compute_list, ceil(NUM_BOIDS/128.), 1, 1)
+	#rd.compute_list_dispatch(compute_list, floor(NUM_BOIDS/128.), 1, 1)
+	#Magic number!! 157 * 128 = 20096
+	rd.compute_list_dispatch(compute_list, 157, 1, 1)
 	rd.compute_list_end()
 	rd.submit()
 		

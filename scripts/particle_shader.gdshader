@@ -1,6 +1,6 @@
 shader_type particles;
 //uniform bool[20000] is_selected;
-uniform vec4[20000] colors;
+uniform vec4[20096] colors;
 uniform sampler2D boid_data;
 uniform float scale = .5;
 
@@ -20,11 +20,8 @@ void process() {
 	TRANSFORM[3].xy = vec2(boid_pos.r, boid_pos.g); 
 	
 	
-	//highlights 'dead' boids
-	if (INDEX < uint(94))
-		COLOR = vec4(1, 0, 0, 1);
-	else
-		COLOR = colors[INDEX];
+	//sets color
+	COLOR = colors[INDEX];
 	
 	
 	//else if (is_selected[INDEX])

@@ -118,11 +118,12 @@ void main() {
 
 	//this causes the larger slow ones, for some reason
 	//aha! its because with alignment, the avg vel is ADDED to the vel, meaning groups are faster!
+	//also means boids left behind are much slower!
 	if (num_neighbors > 0){
 
 		//why the - velocity ?????!?
 		//dont use this one//velocity += (average_velocity / num_neighbors - velocity) * params.alignment_factor * params.delta_time;
-		velocity += (average_velocity / num_neighbors) * params.alignment_factor * params.delta_time;
+		//velocity += (average_velocity / num_neighbors) * params.alignment_factor * params.delta_time;
 
 		//applies average position
 		velocity += (average_position / num_neighbors - position) * params.cohesion_factor * params.delta_time;
@@ -131,7 +132,7 @@ void main() {
 
 	vec2 bias_location = bias_loc.data[index];
 
-	if (!isinf(bias_location[0])){
+	if (1==0 && !isinf(bias_location[0])){
 
 		//magic num bs
 		//var deadzone^2 = 2500
@@ -176,8 +177,8 @@ void main() {
 	position += velocity * params.delta_time;
 
 
-	if (isnan(position.x) || isnan(position.y) || isinf(position.x) || isinf(position.y))
-		position = vec2(0, 0);
+	//if (isnan(position.x) || isnan(position.y) || isinf(position.x) || isinf(position.y))
+	//	position = vec2(0, 0);
 
 	boid_vel.data[index] = velocity;
 	boid_pos.data[index] = position;
