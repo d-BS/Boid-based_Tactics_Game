@@ -11,18 +11,14 @@ var NUM_BOIDS:int = 20096
 #
 #Have initial boids in squads[1], keep squads[0] empty a very start
 #Have goal-less boids removed from squad structure overall?
-#
-#Figure out why some boids are slightly faster than others.
-#Keep this behavior, just figure out WHY it happens, and assign tune-able variable to it
+#get rid of 'selection squad' idea, just have a squad be selected
+#be able to reselect a squad
 #
 #Add formation structure, replace squad_bias (replace bias_loc?)
 #
 #Make NUM_BOIDS dynamic rather than hardcoded
 #(Add in MAX_BOIDS, and only update texture/arrays when passed?)
 #
-#Have 'collisions' dependent on velocity mag + dir of colliding boid
-#in order to make it more realistic, and less 'bouncy'
-#(MAYBE, test in cpu imp first)
 #
 #Binning: Boids only check their own bin, and bins orthoganal to them
 #Bins have side len vision_radius
@@ -45,7 +41,7 @@ var NUM_BOIDS:int = 20096
 #Optimizations for later:
 #
 #Convert vec2 arrays to vec2i arrays / int arrays twice as long
-#
+#In shader, convert distance to dist^2
 #
 
 #buffers-to-be
@@ -79,12 +75,14 @@ var boid_data_texture : ImageTexture
 var vision_radius:float = 35
 var avoid_radius:float = 25
 var min_vel:float = 0
-#formerly 60
+#formerly 60, also not doing anything
 var max_vel:float = 30.0
-var alignment_factor:float = .5
+#formerly .5
+var alignment_factor:float = -.7
+#formerly -.05
 var cohesion_factor:float = -.05
-#formerly 10
-var separation_factor:float = 15
+#formerly 10, then 15 w old formula, .25 w new
+var separation_factor:float = .25
 var damp_factor:float = 1.5
 
 # GPU Variables

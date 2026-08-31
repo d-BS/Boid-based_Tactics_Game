@@ -13,7 +13,6 @@
 ## Known issues:
 	
 	There are still a few kinks that need to be worked out with the GPU boids
-		-  Some boids are faster than others - I like this generally, but I want to tweak it
 		-  The number of boids atm is completely hardcoded
 	
 	GPU boids use naive O(N^2) implementation, I will get to making that better later

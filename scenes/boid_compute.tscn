@@ -26,7 +26,7 @@ script = ExtResource("1_a4ak7")
 material = SubResource("ShaderMaterial_o08vg")
 amount = 100
 texture = ExtResource("2_o08vg")
-lifetime = 0.2
+lifetime = 2.0
 visibility_rect = Rect2(-1000, -1000, 2000, 2000)
 process_material = SubResource("ShaderMaterial_4sp5u")
 

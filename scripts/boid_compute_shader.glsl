@@ -40,6 +40,7 @@ layout(set = 0, binding = 4, std430) restrict buffer Params{
     float image_size;
     float vision_rad;
     float avoid_rad;
+	//Currently doing nothing
     float min_vel;
     float max_vel;
     float alignment_factor;
@@ -72,7 +73,11 @@ void main() {
 
 
 	int num_neighbors = 0;
+	
+	int avoid_neighbors = 0;
 	vec2 avoid_direction = vec2(0,0);
+	vec2 avoid_velocity_ave = vec2(0,0);
+
 	vec2 average_velocity = vec2(0,0);
 	vec2 average_position = vec2(0,0);
 
@@ -94,7 +99,9 @@ void main() {
 				num_neighbors++;
 
 				if(distance <= params.avoid_rad){
+					avoid_neighbors++;
 					avoid_direction += position - b_pos;
+					avoid_velocity_ave += b_vel;
 
 					//if is sleeping
 					//wake
@@ -113,7 +120,7 @@ void main() {
 		}
 	}
 
-	velocity += avoid_direction * params.avoidance_factor * params.delta_time;
+	//velocity += avoid_direction * params.avoidance_factor * params.delta_time;
 
 
 	//this causes the larger slow ones, for some reason
@@ -123,7 +130,7 @@ void main() {
 
 		//why the - velocity ?????!?
 		//dont use this one//velocity += (average_velocity / num_neighbors - velocity) * params.alignment_factor * params.delta_time;
-		//velocity += (average_velocity / num_neighbors) * params.alignment_factor * params.delta_time;
+		velocity += (average_velocity / num_neighbors) * params.alignment_factor * params.delta_time;
 
 		//applies average position
 		velocity += (average_position / num_neighbors - position) * params.cohesion_factor * params.delta_time;
@@ -147,7 +154,7 @@ void main() {
 
 			//formerly 20
 			//magic
-			bias = normalize(bias) * 15;
+			bias = normalize(bias) * 10;
 
 		}
 		else{
@@ -173,6 +180,18 @@ void main() {
 	//sleep
 
 
+	//ignore all other factors if bouncin
+	if(avoid_neighbors != 0){
+
+		avoid_velocity_ave /= avoid_neighbors;
+		avoid_direction /= avoid_neighbors;
+
+		//makes avoid dir stronger the closer the boids are together
+		//magic num 2
+		avoid_direction = -avoid_direction * 1.5 + normalize(avoid_direction) * params.avoid_rad * 2;
+		velocity = (avoid_velocity_ave + velocity) / 2 + (avoid_direction * params.avoidance_factor);
+
+	}
 
 	position += velocity * params.delta_time;
 
