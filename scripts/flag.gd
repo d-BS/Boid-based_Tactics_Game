@@ -10,7 +10,10 @@ func _ready() -> void:
 # Called every frame. 'delta' is the elapsed time since the previous frame.
 func _process(_delta: float) -> void:
 	
-	
+	#DANGER BAD BAD Just make a func in manager for ts
+	if Input.is_action_just_pressed("F"):
+		boid_manager.squads[0].set_formation()
+		pass
 	
 	if Input.is_action_just_pressed("rclick"):
 		position = get_global_mouse_position()

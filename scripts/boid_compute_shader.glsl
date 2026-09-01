@@ -139,7 +139,8 @@ void main() {
 
 	vec2 bias_location = bias_loc.data[index];
 
-	if (1==0 && !isinf(bias_location[0])){
+	//should be turned off!
+	if (!isinf(bias_location[0])){
 
 		//magic num bs
 		//var deadzone^2 = 2500
