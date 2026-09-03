@@ -12,7 +12,12 @@ func _process(_delta: float) -> void:
 	
 	#DANGER BAD BAD Just make a func in manager for ts
 	if Input.is_action_just_pressed("F"):
-		boid_manager.squads[0].set_formation()
+		
+		if boid_manager.selection_squad != -1:
+			boid_manager.squads[boid_manager.selection_squad].set_formation()
+			
+			Squad.f_just_pressed = true
+			
 		pass
 	
 	if Input.is_action_just_pressed("rclick"):

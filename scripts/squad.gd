@@ -4,21 +4,22 @@ static var boid_manager:Node2D
 var units: Array[int]
 
 var goal: Vector2 = Vector2.INF
-var squad_bias: Vector2 = Vector2.ZERO
 var color:Color
 var formation:Formation = null
 
-#static var squad_bias_min: float = 500
-#static var squad_bias_min_squared: float = squad_bias_min * squad_bias_min
-#static var squad_bias_max: float = 1000
-#static var squad_bias_max_squared:float = squad_bias_max * squad_bias_max
+#ACTUALLY WHY IS THIS DOING ANYTHING???
+#if I get rid of this variable WHICH DOES NOTHING
+#then it crashes whenever i make a formation
+static var f_just_pressed:bool = false
+
+var update_uniform:bool = false
 
 static var num_of_squads:int = 0
 var squad_id:int
 
 var appx_location:Vector2 = Vector2.ZERO
 
-func _init(new_units:Array[int], squad_num:int = 0, new_goal:Vector2 = Vector2.INF, new_color:Color = Color.WHITE):
+func _init(new_units:Array[int], squad_num:int, new_goal:Vector2 = Vector2.INF, new_color:Color = Color.WHITE):
 	
 	#loops through and lets each unit know where it is in the squad
 	for i in new_units.size():
@@ -45,9 +46,7 @@ func _init(new_units:Array[int], squad_num:int = 0, new_goal:Vector2 = Vector2.I
 func remove_boid(index:int):
 	
 	
-	
-	boid_manager.squad_biases[units[index]] = Vector2.ZERO
-	boid_manager.bias_locations[units[index]] = Vector2.INF
+	boid_manager.squad_biases[units[index]] = Vector2.INF
 	boid_manager.squad_indeces[units[index]] = Vector2.ZERO
 	
 	#should swap toremove w back
@@ -64,103 +63,110 @@ func remove_boid(index:int):
 
 func set_bias(new_bias:Vector2):
 	
-	if(units.is_empty()):
-		return
-	
 	goal = new_bias
 	
-	for b in units:
+	if new_bias == Vector2.INF:
+		formation = null
+	
+	if formation != null:
+		formation.location = new_bias
 		
-		boid_manager.bias_locations[b] = goal
 		
-	
-	#applies changes
-	
-	boid_manager.rd.free_rid(boid_manager.boid_bias_loc_buffer)
-	
-	boid_manager.boid_bias_loc_buffer = boid_manager._generate_vec2_buffer(boid_manager.bias_locations)
-	var boid_bias_loc_uniform = boid_manager._generate_uniform(boid_manager.boid_bias_loc_buffer, RenderingDevice.UNIFORM_TYPE_STORAGE_BUFFER, 2)
-	boid_manager.bindings[2] = boid_bias_loc_uniform
+		for i in units.size():
+			boid_manager.squad_biases[units[i]] = formation.pos[i] + formation.location
+		
+		boid_manager.queue_update_squad_bias_uniform()
 	
 
 func update(_delta:float):
 	
 	#makes sure only one squad does work per frame
-	var productive:bool = (Engine.get_frames_drawn() + squad_id) % num_of_squads == 0
+	var avg_pos_needed:bool = (Engine.get_frames_drawn() + squad_id) % num_of_squads == 0
+	avg_pos_needed = avg_pos_needed && formation == null
 	
-	if(goal == Vector2.INF):
-		squad_bias = Vector2.ZERO
-	elif(productive):
+	
+	
+	
+	if avg_pos_needed:
 		
-		squad_bias = goal - appx_location
+		boid_manager.queue_update_squad_bias_uniform()
 		
-		#var bias_len_squared:float = squad_bias.length_squared()
 		
-		#must be at least trying to get to the goal
-		#if bias_len_squared < squad_bias_min_squared:
+		var new_location: Vector2 = Vector2.ZERO
+		for b in units:
 			
-		#	squad_bias = squad_bias.normalized() * squad_bias_min
+			#sums locations for new av location
+			var unit_location_color:Color = boid_manager.boid_pos_active[b]
+			var unit_location:Vector2 = Vector2(unit_location_color.r, unit_location_color.g)
+			new_location += unit_location
 			
-		#elif bias_len_squared > squad_bias_max_squared:
 			
-		#	squad_bias = squad_bias.normalized() * squad_bias_max
+			
+			if goal == Vector2.INF:
+				boid_manager.squad_biases[b] = Vector2.INF
+			
+			else:
+				boid_manager.squad_biases[b] = goal + (unit_location - appx_location)
+			
+			
+			
 		
-		#magic number!!
-		squad_bias = squad_bias.normalized() * 1000
+		
+		
+		appx_location = new_location / units.size()
 	
 	
 	
-	var new_location: Vector2 = Vector2.ZERO
-	
-	
-	var iterator:int = 0
-	
-	for b in units:
-		
-		#sums locations for new av location
-		var unit_location_color:Color = boid_manager.boid_pos_active[b]
-		new_location += Vector2(unit_location_color.r, unit_location_color.g)
-		
-		
-		
-		if formation == null:
-			boid_manager.squad_biases[b] = squad_bias
-		else:
-			boid_manager.bias_locations[b] = formation.pos[iterator] + appx_location 
-		
-		
-		iterator += 1
-		
-	
-	
-	if(productive):
-		
-		boid_manager.rd.free_rid(boid_manager.squad_bias_buffer)
-		
-		boid_manager.squad_bias_buffer = boid_manager._generate_vec2_buffer(boid_manager.squad_biases)
-		var squad_bias_uniform = boid_manager._generate_uniform(boid_manager.squad_bias_buffer, RenderingDevice.UNIFORM_TYPE_STORAGE_BUFFER, 3)
-		boid_manager.bindings[3] = squad_bias_uniform
-	
-	appx_location = new_location / units.size()
 	
 	
 	# Magic number 4 for when it dertermines when theyve arrived
 	if goal.distance_squared_to(appx_location) < 16:
 		
-		#DANGER BECAUSE WE LOOP THROUGH B AGAIN
 		set_bias(Vector2.INF)
+		##OR turn of formation - probably not honestly
 		
 		print("Goal reached!")
 		
 		pass
 	
+	
+	
+	
+	
 	pass
 
 
-## test func for now
+## way too hardcoded - needs to be refactored later
 func set_formation():
 	
-	formation = Formation.new(units.size())
+	var new_formation = Formation.new(units.size())
 	
+	if formation != null:
+		new_formation.location = formation.location
+		
+	elif goal == Vector2.INF:
+		new_formation.location = appx_location
+	else:
+		new_formation.location = goal
+	
+	formation = new_formation
+	
+	for i in units.size():
+		
+		boid_manager.squad_biases[units[i]] = formation.pos[i] + formation.location
+		
+	
+	
+	boid_manager.queue_update_squad_bias_uniform()
 	
 	pass
+
+
+func set_color(new_color:Color):
+	
+	
+	for i in units.size():
+		
+		boid_manager.squad_color[units[i]] = new_color
+	
+	color = new_color

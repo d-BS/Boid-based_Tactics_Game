@@ -11,14 +11,13 @@
 [ext_resource type="Script" uid="uid://dddidyxpyk44m" path="res://scripts/environment.gd" id="9_85g3d"]
 [ext_resource type="Script" uid="uid://dmwb2h2x865tp" path="res://scripts/ui.gd" id="10_choun"]
 [ext_resource type="Script" uid="uid://c03c25r226vyr" path="res://scripts/selection_box.gd" id="14_jbj1t"]
-[ext_resource type="PackedScene" uid="uid://bhrta0t8dujcb" path="res://scenes/boid_manager_cpu.tscn" id="14_jkv2x"]
 
 [sub_resource type="Gradient" id="Gradient_eb6dy"]
 
 [sub_resource type="GradientTexture2D" id="GradientTexture2D_jkv2x"]
 gradient = SubResource("Gradient_eb6dy")
 
-[sub_resource type="OccluderPolygon2D" id="OccluderPolygon2D_eb6dy"]
+[sub_resource type="OccluderPolygon2D" id="OccluderPolygon2D_ya4ey"]
 polygon = PackedVector2Array(254, -8, 255, 127, 1, 122, 7, -189, 125, -190, 141, -3)
 
 [sub_resource type="Gradient" id="Gradient_tipki"]
@@ -73,7 +72,7 @@ position = Vector2(297, 155)
 texture = ExtResource("1_0wfyh")
 offset = Vector2(30, -37)
 script = ExtResource("2_sugp2")
-boid_manager = NodePath("../BoidLand")
+boid_manager = NodePath("")
 
 [node name="Camera2D" type="Camera2D" parent="Node2D" unique_id=1527972479]
 position_smoothing_enabled = true
@@ -91,7 +90,7 @@ polygon = PackedVector2Array(254, -8, 255, 127, 1, 122, 7, -189, 125, -190, 141,
 
 [node name="LightOccluder2D" type="LightOccluder2D" parent="Node2D/Barrier" unique_id=1126008129]
 light_mask = 3
-occluder = SubResource("OccluderPolygon2D_eb6dy")
+occluder = SubResource("OccluderPolygon2D_ya4ey")
 
 [node name="PointLight2D" type="PointLight2D" parent="Node2D" unique_id=1111445167]
 position = Vector2(-98, 47)
@@ -125,12 +124,9 @@ texture = ExtResource("6_tefeu")
 
 [node name="CenterRegion" type="VisibleOnScreenNotifier2D" parent="Node2D/Ground" unique_id=869512825]
 
-[node name="BoidLand" parent="Node2D" unique_id=478367503 instance=ExtResource("14_jkv2x")]
-draw_velocity = false
-
 [node name="SelectionBox" type="Node2D" parent="Node2D" unique_id=1695069903 node_paths=PackedStringArray("boid_manager")]
 script = ExtResource("14_jbj1t")
-boid_manager = NodePath("../BoidLand")
+boid_manager = NodePath("")
 
 [node name="CanvasLayer" type="CanvasLayer" parent="." unique_id=1708692599]
 

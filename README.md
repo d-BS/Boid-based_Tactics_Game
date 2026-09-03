@@ -3,9 +3,8 @@
 ## Current features:
 	
 	The titular boids, using a modified algorithm. 
-		-  Includes both a CPU and a GPU implementation
 	
-	Simple selection and target setting
+	Simple selection and target setting, basic formation implementaion
 	
 	Basic grass shader I cooked up
 
@@ -23,7 +22,11 @@
 
 	Arrow keys to move the camera, +/- keys to zoom in / out.
 
-	Click + Drag to select units, and right click to give currently selected units a goal.
-	Backspace / Delete to get rid of currently selected boid's goal
+	Click + Drag to select units
+	Right click to give current selection a goal.
+	Backspace / Delete to get rid of current selection's goal
+	F to tell current selection to use a formation
 
 	Spacebar to reset 
+
+	

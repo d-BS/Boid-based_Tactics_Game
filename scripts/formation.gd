@@ -7,6 +7,7 @@ var size:int
 var formation_style:String
 
 var spacing:Vector2
+var location:Vector2
 
 var rows:int
 var cols:int
@@ -19,7 +20,7 @@ func _init(num_units:int) -> void:
 	rows = ceil(row_num)
 	cols = floor(row_num)
 	
-	spacing = Vector2(35, 35)
+	spacing = Vector2(100, 100)
 	
 	create_form()
 	

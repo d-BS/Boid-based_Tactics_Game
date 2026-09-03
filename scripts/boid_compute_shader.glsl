@@ -26,16 +26,13 @@ layout(set = 0, binding = 1, std430) restrict buffer Velocity{
 	vec2 data[];
 } boid_vel;
 
-layout(set = 0, binding = 2, std430) restrict buffer BiasLocation{
-	vec2 data[];
-} bias_loc;
-
-layout(set = 0, binding = 3, std430) restrict buffer SquadBias{
+//buffer for bias provided by squad
+layout(set = 0, binding = 2, std430) restrict buffer SquadBias{
 	vec2 data[];
 } squad_bias;
 
 //parameter buffer
-layout(set = 0, binding = 4, std430) restrict buffer Params{
+layout(set = 0, binding = 3, std430) restrict buffer Params{
 	float num_boids;
     float image_size;
     float vision_rad;
@@ -61,7 +58,7 @@ layout(set = 0, binding = 4, std430) restrict buffer Params{
 
 //image out
 //formerly rgba16f
-layout(rgba32f, binding = 5) uniform image2D boid_data;
+layout(rgba32f, binding = 4) uniform image2D boid_data;
 
 
 void main() {
@@ -70,6 +67,21 @@ void main() {
 
 	vec2 position = boid_pos.data[index];
 	vec2 velocity = boid_vel.data[index];
+
+
+
+
+	//last resort catches
+	//dont like that I need this
+	if (isnan(position.x) || isnan(position.y) || isinf(position.x) || isinf(position.y))
+		position = vec2(0, 0);
+	if (isnan(velocity.x) || isnan(velocity.y) || isinf(velocity.x) || isinf(velocity.y))
+		velocity = vec2(0, 0);
+
+
+
+
+
 
 
 	int num_neighbors = 0;
@@ -120,16 +132,12 @@ void main() {
 		}
 	}
 
-	//velocity += avoid_direction * params.avoidance_factor * params.delta_time;
 
 
-	//this causes the larger slow ones, for some reason
-	//aha! its because with alignment, the avg vel is ADDED to the vel, meaning groups are faster!
-	//also means boids left behind are much slower!
+	
 	if (num_neighbors > 0){
 
-		//why the - velocity ?????!?
-		//dont use this one//velocity += (average_velocity / num_neighbors - velocity) * params.alignment_factor * params.delta_time;
+		//this causes groups to go faster whn alignment_factor is positive
 		velocity += (average_velocity / num_neighbors) * params.alignment_factor * params.delta_time;
 
 		//applies average position
@@ -137,41 +145,22 @@ void main() {
 	}
 
 
-	vec2 bias_location = bias_loc.data[index];
+	//Formerly
+		//velocity += squad_bias * delta * bias_factor
+		//magic number .075 for bias_factor
+		//velocity += squad_bias.data[index] * params.delta_time * .075;
+	
 
-	//should be turned off!
-	if (!isinf(bias_location[0])){
-
-		//magic num bs
-		//var deadzone^2 = 2500
-		// max speed = 20
-
+	vec2 personal_squad_bias = squad_bias.data[index];
+	if(!isinf(personal_squad_bias[0])){
 		
+		vec2 bias = personal_squad_bias - position;
 
-		vec2 bias = bias_location - position;
-
-		//magic
-		if(dot(bias, bias) > 2500){
-
-			//formerly 20
-			//magic
-			bias = normalize(bias) * 10;
-
-		}
-		else{
-			bias = vec2(0, 0);
-		}
-
-		velocity += bias * params.delta_time;
-
+		//ridiculous degrees of magic numbers
+		if(bias != vec2(0,0))
+			velocity += normalize(bias) * 1000 * params.delta_time * .075;
 
 	}
-	
-	
-	//velocity += squad_bias * delta * bias_factor
-	//magic number .075 for bias_factor
-	velocity += squad_bias.data[index] * params.delta_time * .075;
-
 
 	//applies damping
 	velocity /= 1 + params.damp_factor * params.delta_time;
@@ -181,7 +170,7 @@ void main() {
 	//sleep
 
 
-	//ignore all other factors if bouncin
+	//skips work if no collisions
 	if(avoid_neighbors != 0){
 
 		avoid_velocity_ave /= avoid_neighbors;
@@ -189,16 +178,21 @@ void main() {
 
 		//makes avoid dir stronger the closer the boids are together
 		//magic num 2
-		avoid_direction = -avoid_direction * 1.5 + normalize(avoid_direction) * params.avoid_rad * 2;
-		velocity = (avoid_velocity_ave + velocity) / 2 + (avoid_direction * params.avoidance_factor);
+		avoid_direction = -avoid_direction * 1.25 + normalize(avoid_direction) * params.avoid_rad * 2;
 
+
+		//takes the weighted average of current velocity and colliding velocities
+		//adds avoidance vector, for final semi-elastic collision
+		float self_v_weight = .2;
+		velocity = (avoid_velocity_ave * self_v_weight + velocity) / (1 + self_v_weight) + (avoid_direction * params.avoidance_factor);
+		
+
+		//velocity = avoid_velocity_ave + (avoid_direction * params.avoidance_factor);
 	}
 
 	position += velocity * params.delta_time;
 
 
-	//if (isnan(position.x) || isnan(position.y) || isinf(position.x) || isinf(position.y))
-	//	position = vec2(0, 0);
 
 	boid_vel.data[index] = velocity;
 	boid_pos.data[index] = position;

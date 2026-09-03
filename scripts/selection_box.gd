@@ -22,11 +22,8 @@ func _process(_delta: float) -> void:
 		
 	elif Input.is_action_just_released("click"):
 		
-		#_finalize_selection_using_overlapping_areas()
-		if!boid_manager.SIMULATE_GPU:
-			_finalize_selection_homemade()
-		else:
-			_finalize_selection_gpu()
+		
+		_finalize_selection_gpu()
 		
 		selectionRect = Rect2(0, 0, 0, 0)
 		dragging = false
@@ -66,37 +63,6 @@ func _draw() -> void:
 
 
 
-func _finalize_selection_homemade():
-	
-	
-	var boid_list:Array[Boid]
-	var to_select:Array[Boid] = []
-	
-	
-	for s in boid_manager.squads:
-		
-		if s == null:
-			continue
-		
-		boid_list.append_array(s.units)
-	
-	
-	selectionRect = selectionRect.abs()
-	
-	#DANGER Apply grid later
-	for b in boid_list:
-		
-		if selectionRect.has_point(b.position):
-			
-			to_select.append(b)
-			
-		
-		pass
-	
-	boid_manager.select_boids(to_select)
-	
-	pass
-
 #DANGER DANGER BAD PROGRAMMING HERE -> update w binning later
 func _finalize_selection_gpu():
 	
@@ -118,7 +84,6 @@ func _finalize_selection_gpu():
 	
 	
 	boid_manager.select_boids(to_select)
-	
 	
 	
 	pass

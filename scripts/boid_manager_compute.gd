@@ -5,17 +5,15 @@ var DEBUG_LOG = false
 var NUM_BOIDS:int = 20096
 
 
-#scale was 1.5 while 16 x 16
-
 
 #TODO:
 #
-#Have initial boids in squads[1], keep squads[0] empty a very start
-#Have goal-less boids removed from squad structure overall?
-#get rid of 'selection squad' idea, just have a squad be selected
-#be able to reselect a squad
 #
-#Add formation structure, replace squad_bias (replace bias_loc?)
+#Have goal-less boids removed from squad structure overall?
+#
+#
+#>>>>>>>> be able to reselect a squad!!!!! <<<<<<<<<<<<
+#
 #
 #Make NUM_BOIDS dynamic rather than hardcoded
 #(Add in MAX_BOIDS, and only update texture/arrays when passed?)
@@ -45,13 +43,11 @@ var NUM_BOIDS:int = 20096
 #buffers-to-be
 var boid_pos:PackedVector2Array = []
 var boid_vel:PackedVector2Array = []
-var bias_locations:PackedVector2Array = []
 var squad_biases:PackedVector2Array = []
 ## Stores bin #, boid id #
 var bin_list:PackedVector2Array = []
 
-#turn into packed byte array later? -> turn into squad_color
-#var is_selected:Array[bool]
+#tells each unit what color to be, usually according to squad
 var squad_color:Array[Color]
 
 ## contains positions of boids, and is actively updated
@@ -96,7 +92,6 @@ var uniform_set : RID
 
 var boid_pos_buffer : RID
 var boid_vel_buffer : RID
-var boid_bias_loc_buffer:RID
 var squad_bias_buffer:RID
 var params_buffer: RID
 var params_uniform : RDUniform
@@ -104,6 +99,7 @@ var boid_data_buffer : RID
 
 
 
+var update_squad_bias_uniform:bool = false
 
 
 func _ready():
@@ -111,15 +107,11 @@ func _ready():
 	seed(0)
 	
 	
-	
-	
 	boid_data = Image.create(IMAGE_SIZE, IMAGE_SIZE, false, Image.FORMAT_RGBAF)								
 	boid_data_texture = ImageTexture.create_from_image(boid_data)
 	
-	bias_locations.resize(NUM_BOIDS)
 	squad_biases.resize(NUM_BOIDS)
-	bias_locations.fill(Vector2.INF)
-	squad_biases.fill(Vector2.ZERO)
+	squad_biases.fill(Vector2.INF)
 	
 	#REMEMBER TO CHANGE IN GDSHADER
 	#is_selected.resize(20000)
@@ -149,10 +141,9 @@ func _ready():
 		_update_boids_gpu(0)
 	
 	
-	
 	#destroys the now-useless buffers
-	boid_pos = []
-	boid_vel = []
+	boid_pos.clear()
+	boid_vel .clear()
 	
 
 func _generate_boids():
@@ -171,7 +162,7 @@ func _generate_boids():
 		squad_indeces[i] = Vector2(0, i)
 	
 	
-	squads = [Squad.new([])]
+	squads = [Squad.new([], 0)]
 	squads[0].boid_manager = self
 	squads[0].units = array_o_boids
 
@@ -184,18 +175,22 @@ func _process(delta):
 	
 	
 	
-	if SIMULATE_GPU:
-		_sync_boids_gpu()
 	
+	
+	
+	_sync_boids_gpu()
 	
 	
 	_update_data_texture()
 	
 	
+	_update_boids_gpu(delta)
 	
-	if SIMULATE_GPU:
-		_update_boids_gpu(delta)
-		
+	
+	
+	
+	
+	
 	
 	
 	for s in squads:
@@ -203,15 +198,30 @@ func _process(delta):
 		s.update(delta)
 		
 	
+	
+	
+	_update_squad_bias_uniform()
+		
+	
+	
+	
 	queue_redraw()
 	
+	Squad.f_just_pressed = false
+	
+
+
+
 func _draw() -> void:
 	
 	#draw_rect($boid_particles.visibility_rect, Color.AQUA)
 	
 	for s in squads:
 		
-		if(!is_inf(s.goal.x)):
+		if s.formation != null:
+			pass
+		
+		elif(!is_inf(s.goal.x)):
 			draw_line(s.goal, s.appx_location, Color.GREEN, 30)
 		#draw_circle(s.appx_location, 10, Color.GREEN)
 		#draw_circle(s.goal, 10, Color.RED)
@@ -237,6 +247,8 @@ func _update_boids_gpu(delta):
 	rd.compute_list_end()
 	rd.submit()
 		
+
+## Recieves work from gpu. is slow if gpu hasn't yet finished
 func _sync_boids_gpu():
 	rd.sync()
 	
@@ -283,14 +295,11 @@ func _setup_compute_shader():
 	boid_vel_buffer = _generate_vec2_buffer(boid_vel)
 	var boid_vel_uniform = _generate_uniform(boid_vel_buffer, RenderingDevice.UNIFORM_TYPE_STORAGE_BUFFER, 1)
 	
-	boid_bias_loc_buffer = _generate_vec2_buffer(bias_locations)
-	var boid_bias_loc_uniform = _generate_uniform(boid_bias_loc_buffer, RenderingDevice.UNIFORM_TYPE_STORAGE_BUFFER, 2)
-	
 	squad_bias_buffer = _generate_vec2_buffer(squad_biases)
-	var squad_bias_uniform = _generate_uniform(squad_bias_buffer, RenderingDevice.UNIFORM_TYPE_STORAGE_BUFFER, 3)
+	var squad_bias_uniform = _generate_uniform(squad_bias_buffer, RenderingDevice.UNIFORM_TYPE_STORAGE_BUFFER, 2)
 	
 	params_buffer = _generate_parameter_buffer(0)
-	params_uniform = _generate_uniform(params_buffer, RenderingDevice.UNIFORM_TYPE_STORAGE_BUFFER, 4)
+	params_uniform = _generate_uniform(params_buffer, RenderingDevice.UNIFORM_TYPE_STORAGE_BUFFER, 3)
 	
 	var fmt := RDTextureFormat.new()
 	fmt.width = IMAGE_SIZE
@@ -300,9 +309,9 @@ func _setup_compute_shader():
 	
 	var view := RDTextureView.new()
 	boid_data_buffer = rd.texture_create(fmt, view, [boid_data.get_data()])
-	var boid_data_buffer_uniform = _generate_uniform(boid_data_buffer, RenderingDevice.UNIFORM_TYPE_IMAGE, 5)
+	var boid_data_buffer_uniform = _generate_uniform(boid_data_buffer, RenderingDevice.UNIFORM_TYPE_IMAGE, 4)
 	
-	bindings = [boid_pos_uniform, boid_vel_uniform, boid_bias_loc_uniform, squad_bias_uniform, params_uniform, boid_data_buffer_uniform]
+	bindings = [boid_pos_uniform, boid_vel_uniform, squad_bias_uniform, params_uniform, boid_data_buffer_uniform]
 	
 func _generate_vec2_buffer(data):
 	var data_buffer_bytes := PackedVector2Array(data).to_byte_array()
@@ -322,6 +331,7 @@ func _generate_parameter_buffer(delta):
 		IMAGE_SIZE, 
 		vision_radius,
 		avoid_radius,
+		#useless as of rn
 		min_vel, 
 		max_vel,
 		alignment_factor,
@@ -348,8 +358,6 @@ func _exit_tree():
 		rd.free_rid(boid_vel_buffer)
 		rd.free_rid(pipeline)
 		rd.free_rid(boid_compute_shader)
-		
-		rd.free_rid(boid_bias_loc_buffer)
 		rd.free_rid(squad_bias_buffer)
 		
 		
@@ -359,16 +367,37 @@ func _exit_tree():
 
 func set_selected_bias(new_bias:Vector2):
 	
-	#just sets all of them
-	squads[0].set_bias(new_bias)
+	if selection_squad == -1:
+		return
+	
+	squads[selection_squad].set_bias(new_bias)
 	
 	
 	pass
 
 
+
+
 func select_boids(new_selection:Array[int]):
 	
-	#is_selected.fill(false)
+	
+	#sets color of former selection squad
+	if selection_squad != -1:
+		var new_color: Color = Color.from_ok_hsl(randf(), .8, .8)
+		squads[selection_squad].set_color(new_color)
+		
+	
+	
+	if new_selection.is_empty():
+		
+		$boid_particles.process_material.set_shader_parameter("color", squad_color)
+		
+		selection_squad = -1
+		return
+	
+	
+	
+	
 	
 	#remeves selected boids from whatever squads they were in
 	for b:int in new_selection:
@@ -385,29 +414,28 @@ func select_boids(new_selection:Array[int]):
 		squads[squad_getting_removed_from].remove_boid(int(squad_indeces[b].y))
 		
 		#if b's squad is now empty, adds to empty_squads
-		if squad_getting_removed_from != 0 && squads[squad_getting_removed_from].units.is_empty():
+		if squads[squad_getting_removed_from].units.is_empty():
 			empty_squads.insert(empty_squads.bsearch(squad_getting_removed_from), squad_getting_removed_from)
 			
 		
 	
 	
 	
-	#removes any remaining boids from selection squad
-	deselect_boids()
+	#adds selection to either back or empty slot of squad structure
+	if empty_squads.is_empty():
+		
+		selection_squad = squads.size()
+		squads.append(Squad.new(new_selection, selection_squad))
+		
+		
+	else:
+		
+		selection_squad = empty_squads[0]
+		empty_squads.pop_front()
+		squads[selection_squad] = Squad.new(new_selection, selection_squad)
+		
+		
 	
-	
-	
-	#new_selection is selection squad now
-	squads[0] = Squad.new(new_selection)
-	
-	
-	
-	#updates the bias
-	#I bet this is causing the abberant boids, or at least a part of the cause
-	rd.free_rid(boid_bias_loc_buffer)
-	boid_bias_loc_buffer = _generate_vec2_buffer(bias_locations)
-	var boid_bias_loc_uniform = _generate_uniform(boid_bias_loc_buffer, RenderingDevice.UNIFORM_TYPE_STORAGE_BUFFER, 2)
-	bindings[2] = boid_bias_loc_uniform
 	
 	
 	
@@ -427,29 +455,18 @@ func select_boids(new_selection:Array[int]):
 	pass
 
 
-func deselect_boids():
+func queue_update_squad_bias_uniform():
+	update_squad_bias_uniform = true
+func _update_squad_bias_uniform():
 	
-	
-	if squads[0].units.is_empty():
+	if ! update_squad_bias_uniform:
 		return
 	
-	var new_color: Color = Color.from_ok_hsl(randf(), .8, .8)
+	rd.free_rid(squad_bias_buffer)
 	
-	#moves selection squad from [0] to either end or first empty
-	if empty_squads.is_empty():
-		
-		#append new squad to end of squads
-		
-		squads.append(Squad.new(squads[0].units, squads.size(), squads[0].goal, new_color))
-		
-		
-		pass
-	else:
-		
-		squads[empty_squads[0]] = Squad.new(squads[0].units, empty_squads[0], squads[0].goal, new_color)
-		empty_squads.pop_front()
-		
-		pass
+	squad_bias_buffer = _generate_vec2_buffer(squad_biases)
+	var squad_bias_uniform = _generate_uniform(squad_bias_buffer, RenderingDevice.UNIFORM_TYPE_STORAGE_BUFFER, 2)
+	bindings[2] = squad_bias_uniform
 	
 	
-	pass
+	update_squad_bias_uniform = false
