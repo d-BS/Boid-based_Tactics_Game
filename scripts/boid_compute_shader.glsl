@@ -3,10 +3,7 @@
 
 
 //to add:
-//sleeping
-//bias
-//squad bias
-//damping
+//sleeping ... ?
 //switch all instances of 'distance' and 'length'
 // to dist^2 & len^2
 
@@ -50,8 +47,6 @@ layout(set = 0, binding = 3, std430) restrict buffer Params{
 } params;
 
 
-//float bias_factor;
-//float damp_factor; -- done!
 //float sleep_cutoff;
 //float wake_cutoff;
 
@@ -177,8 +172,8 @@ void main() {
 		avoid_direction /= avoid_neighbors;
 
 		//makes avoid dir stronger the closer the boids are together
-		//magic num 2
-		avoid_direction = -avoid_direction * 1.25 + normalize(avoid_direction) * params.avoid_rad * 2;
+		//magic nums formerly 1.25, 2
+		avoid_direction = -avoid_direction * 2.5 + normalize(avoid_direction) * params.avoid_rad * 3;
 
 
 		//takes the weighted average of current velocity and colliding velocities

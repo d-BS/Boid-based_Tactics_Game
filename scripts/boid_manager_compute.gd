@@ -10,12 +10,9 @@ var NUM_BOIDS:int = 20096
 #
 #
 #Have goal-less boids removed from squad structure overall?
+#add more kinds of formations, remove hardcoding
 #
-#
-#>>>>>>>> be able to reselect a squad!!!!! <<<<<<<<<<<<
-#
-#
-#Make NUM_BOIDS dynamic rather than hardcoded
+#>>>>>>>Make NUM_BOIDS dynamic rather than hardcoded
 #(Add in MAX_BOIDS, and only update texture/arrays when passed?)
 #be able to create boids, have boids be killed, etc
 #
@@ -65,7 +62,7 @@ var selection_squad:int = -1
 #lists which squads are empty
 var empty_squads:Array[int] = []
 
-var IMAGE_SIZE:int = int(ceil(sqrt(NUM_BOIDS))) + 1
+var IMAGE_SIZE:int = int(ceil(sqrt(NUM_BOIDS)))
 var boid_data : Image
 var boid_data_texture : ImageTexture
 
@@ -98,13 +95,16 @@ var params_uniform : RDUniform
 var boid_data_buffer : RID
 
 
-
 var update_squad_bias_uniform:bool = false
+
+
+@warning_ignore("unused_signal")
+signal squads_updated
 
 
 func _ready():
 	
-	seed(0)
+	#seed(0)
 	
 	
 	boid_data = Image.create(IMAGE_SIZE, IMAGE_SIZE, false, Image.FORMAT_RGBAF)								
@@ -167,7 +167,7 @@ func _generate_boids():
 	squads[0].units = array_o_boids
 
 
-func _process(delta):	
+func _process(delta):
 	
 	
 	
@@ -450,6 +450,35 @@ func select_boids(new_selection:Array[int]):
 	
 	
 	#colors selected boids
+	$boid_particles.process_material.set_shader_parameter("color", squad_color)
+	
+	pass
+
+
+func select_squad(new_selection_squad:int):
+	
+	if new_selection_squad >= squads.size() || new_selection_squad < -1:
+		return
+	
+	
+	if selection_squad != -1:
+		
+		var new_color: Color = Color.from_ok_hsl(randf(), .8, .8)
+		squads[selection_squad].set_color(new_color)
+		
+		pass
+	
+	if new_selection_squad != -1:
+		
+		
+		squads[new_selection_squad].set_color(Color.WHITE)
+		
+		
+		pass
+	
+	selection_squad = new_selection_squad
+	
+	
 	$boid_particles.process_material.set_shader_parameter("color", squad_color)
 	
 	pass

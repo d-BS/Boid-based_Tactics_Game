@@ -8,6 +8,7 @@
 [ext_resource type="Texture2D" uid="uid://b4ov5nm0tlo3x" path="res://textures/flag.png" id="4_cpftq"]
 [ext_resource type="Script" uid="uid://236saenw6w3s" path="res://scripts/flag.gd" id="5_k0nt5"]
 [ext_resource type="Script" uid="uid://c03c25r226vyr" path="res://scripts/selection_box.gd" id="6_f8if2"]
+[ext_resource type="Script" uid="uid://dpsvd5qyoodon" path="res://scripts/UI/squad_list.gd" id="9_cpftq"]
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_o08vg"]
 shader = ExtResource("2_cpftq")
@@ -46,3 +47,22 @@ boid_manager = NodePath("../BoidCompute")
 [node name="SelectionBox" type="Node2D" parent="." unique_id=43340325 node_paths=PackedStringArray("boid_manager")]
 script = ExtResource("6_f8if2")
 boid_manager = NodePath("../BoidCompute")
+
+[node name="UiLayer" type="CanvasLayer" parent="." unique_id=1935443301]
+
+[node name="SquadList" type="ItemList" parent="UiLayer" unique_id=1968125620 node_paths=PackedStringArray("boid_manager")]
+anchors_preset = -1
+anchor_left = 0.87700003
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -0.8400879
+grow_horizontal = 0
+grow_vertical = 2
+size_flags_horizontal = 4
+size_flags_vertical = 4
+focus_mode = 0
+script = ExtResource("9_cpftq")
+boid_manager = NodePath("../../BoidCompute")
+
+[connection signal="squads_updated" from="BoidCompute" to="UiLayer/SquadList" method="_on_squads_updated"]
+[connection signal="item_selected" from="UiLayer/SquadList" to="UiLayer/SquadList" method="_on_item_selected"]

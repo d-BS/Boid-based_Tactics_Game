@@ -12,15 +12,15 @@ func _ready() -> void:
 	pass # Replace with function body.
 
 
-# Called every frame. 'delta' is the elapsed time since the previous frame.
-func _process(_delta: float) -> void:
+
+func _unhandled_input(event: InputEvent) -> void:
 	
-	if Input.is_action_just_pressed("click"):
+	if event.is_action_pressed("click"):
 		
 		dragging = true
 		
 		
-	elif Input.is_action_just_released("click"):
+	elif event.is_action_released("click"):
 		
 		
 		_finalize_selection_gpu()
@@ -29,6 +29,14 @@ func _process(_delta: float) -> void:
 		dragging = false
 		queue_redraw()
 		
+	
+	
+	pass
+
+# Called every frame. 'delta' is the elapsed time since the previous frame.
+func _process(_delta: float) -> void:
+	
+	
 		#coll_shape.shape.size = Vector2.ZERO
 		
 	
@@ -47,6 +55,8 @@ func _process(_delta: float) -> void:
 		pass
 	
 	pass
+
+
 
 
 
@@ -85,5 +95,6 @@ func _finalize_selection_gpu():
 	
 	boid_manager.select_boids(to_select)
 	
+	boid_manager.squads_updated.emit()
 	
 	pass

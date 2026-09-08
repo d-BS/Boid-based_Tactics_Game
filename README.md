@@ -24,8 +24,9 @@
 
 	Click + Drag to select units
 	Right click to give current selection a goal.
-	Backspace / Delete to get rid of current selection's goal
 	F to tell current selection to use a formation
+	Backspace / Delete to get rid of current selection's goal and formation
+	
 
 	Spacebar to reset 
 
