@@ -65,6 +65,7 @@ func create_form():
 	
 	for i in size:
 		
+		@warning_ignore("integer_division")
 		var row_index:int = i / rows
 		var col_index:int = i % rows
 		

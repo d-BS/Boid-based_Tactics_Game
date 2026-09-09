@@ -1,6 +1,5 @@
 shader_type particles;
-//uniform bool[20000] is_selected;
-uniform vec4[20096] colors;
+uniform sampler2D boid_colors;
 uniform sampler2D boid_data;
 uniform float scale = .5;
 
@@ -21,7 +20,7 @@ void process() {
 	
 	
 	//sets color
-	COLOR = colors[INDEX];
+	COLOR = texelFetch(boid_colors, texel_pos, 0);
 	
 	
 	//else if (is_selected[INDEX])

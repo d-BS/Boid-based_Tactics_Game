@@ -11,6 +11,7 @@
 //flat 128 threads.
 //1024 from the tutorial didn't work for me, so I settled on this.
 //maybe try 16 x 16 later
+
 layout(local_size_x = 128, local_size_y = 1, local_size_z = 1) in;
 
 //buffer for the position of each boid
@@ -34,15 +35,20 @@ layout(set = 0, binding = 3, std430) restrict buffer Params{
     float image_size;
     float vision_rad;
     float avoid_rad;
+
 	//Currently doing nothing
     float min_vel;
     float max_vel;
+
     float alignment_factor;
     float cohesion_factor;
     float avoidance_factor;
     float damp_factor;
+
+	//also doing nothing
     float viewport_x;
     float viewport_y;
+
     float delta_time;
 } params;
 
@@ -59,6 +65,9 @@ layout(rgba32f, binding = 4) uniform image2D boid_data;
 void main() {
 	
 	int index = int(gl_GlobalInvocationID.x);
+
+	if (index >= params.num_boids)
+		return;
 
 	vec2 position = boid_pos.data[index];
 	vec2 velocity = boid_vel.data[index];
@@ -184,6 +193,12 @@ void main() {
 
 		//velocity = avoid_velocity_ave + (avoid_direction * params.avoidance_factor);
 	}
+
+
+	//apply max_vel -> doesnt seem necessary
+	//if(length(velocity) > params.max_vel)
+	//	velocity = normalize(velocity) * params.max_vel;
+	
 
 	position += velocity * params.delta_time;
 

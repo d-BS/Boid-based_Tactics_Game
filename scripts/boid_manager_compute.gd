@@ -1,22 +1,36 @@
 extends Node2D
 var DEBUG_LOG = false
 
+## current number of boids
+var NUM_BOIDS:int = 25000
 
-var NUM_BOIDS:int = 20096
+## maximum boids that current setup can handle w/o reallocating stuff, 
+## set to nearest multiple of 128
+var MAX_BOIDS:int = NUM_BOIDS + (0 if (NUM_BOIDS % 128 == 0) else (128 - NUM_BOIDS % 128))
 
+#var MAX_BOIDS = 20096
+
+@warning_ignore("integer_division")
+var NUM_WORKGROUPS:int = MAX_BOIDS / 128
 
 
 #TODO:
 #
 #
 #Have goal-less boids removed from squad structure overall?
+#
+#
 #add more kinds of formations, remove hardcoding
+#have finer-tune control of formation during gameplay, add ui for this
+#
+#detangle formation.location and goal, that was a bad idea
 #
 #>>>>>>>Make NUM_BOIDS dynamic rather than hardcoded
-#(Add in MAX_BOIDS, and only update texture/arrays when passed?)
 #be able to create boids, have boids be killed, etc
 #
-#Binning: Boids only check their own bin, and bins orthoganal to them
+#
+#
+#Binning: Boids only check their own bin, orthoganal bins
 #Bins have side len vision_radius
 #to get bin # for each boid, we:
 #vec2i bin_pair = int(pos / vision_rad)
@@ -33,7 +47,7 @@ var NUM_BOIDS:int = 20096
 #
 #Optimizations for later:
 #
-#Convert vec2 arrays to vec2i arrays / int arrays twice as long
+#Convert vec2 arrays to vec2i arrays / int arrays twice as long?
 #In shader, convert distance to dist^2
 #
 
@@ -44,8 +58,6 @@ var squad_biases:PackedVector2Array = []
 ## Stores bin #, boid id #
 var bin_list:PackedVector2Array = []
 
-#tells each unit what color to be, usually according to squad
-var squad_color:Array[Color]
 
 ## contains positions of boids, and is actively updated
 var boid_pos_active:PackedColorArray = []
@@ -62,14 +74,20 @@ var selection_squad:int = -1
 #lists which squads are empty
 var empty_squads:Array[int] = []
 
-var IMAGE_SIZE:int = int(ceil(sqrt(NUM_BOIDS)))
+#textures that store information for particle shader
+var IMAGE_SIZE:int = int(ceil(sqrt(MAX_BOIDS)))
 var boid_data : Image
 var boid_data_texture : ImageTexture
+var boid_colors_image : Image
+var boid_colors_texture : ImageTexture
+
+var boid_colors:PackedColorArray
+
 
 var vision_radius:float = 35
 var avoid_radius:float = 25
 var min_vel:float = 0
-#formerly 60, also not doing anything
+#formerly 60, also not doing anything, 30
 var max_vel:float = 30.0
 #formerly .5
 var alignment_factor:float = -.7
@@ -80,7 +98,6 @@ var separation_factor:float = .25
 var damp_factor:float = 1.5
 
 # GPU Variables
-var SIMULATE_GPU:bool = true
 var rd : RenderingDevice
 var boid_compute_shader : RID
 var pipeline : RID
@@ -94,8 +111,10 @@ var params_buffer: RID
 var params_uniform : RDUniform
 var boid_data_buffer : RID
 
+#different queue variables
 
 var update_squad_bias_uniform:bool = false
+var update_boid_color_tex:bool = false
 
 
 @warning_ignore("unused_signal")
@@ -106,39 +125,41 @@ func _ready():
 	
 	#seed(0)
 	
+	print(MAX_BOIDS)
 	
-	boid_data = Image.create(IMAGE_SIZE, IMAGE_SIZE, false, Image.FORMAT_RGBAF)								
+	boid_data = Image.create_empty(IMAGE_SIZE, IMAGE_SIZE, false, Image.FORMAT_RGBAF)								
 	boid_data_texture = ImageTexture.create_from_image(boid_data)
+	boid_colors_image = Image.create_empty(IMAGE_SIZE, IMAGE_SIZE, false, Image.FORMAT_RGBAF)								
+	boid_colors_texture = ImageTexture.create_from_image(boid_colors_image)
 	
-	squad_biases.resize(NUM_BOIDS)
-	squad_biases.fill(Vector2.INF)
 	
 	#REMEMBER TO CHANGE IN GDSHADER
-	#is_selected.resize(20000)
-	#is_selected.fill(false)
+	squad_biases.resize(MAX_BOIDS)
+	squad_biases.fill(Vector2.INF)
 	
-	squad_color.resize(20096)
-	squad_color.fill(Color.BLACK)
+	boid_colors.resize(IMAGE_SIZE * IMAGE_SIZE)
+	boid_colors.fill(Color.BLACK)
 	
 	
 	
-	_generate_boids()
-	
+	_initial_boid_setup()
+	queue_update_boid_colors()
 	
 	$boid_particles.amount = NUM_BOIDS
 	$boid_particles.process_material.set_shader_parameter("boid_data", boid_data_texture)
-	#$boid_particles.process_material.set_shader_parameter("is_selected", is_selected)
-	$boid_particles.process_material.set_shader_parameter("colors", squad_color)
+	$boid_particles.process_material.set_shader_parameter("boid_colors", boid_colors_texture)
 	
-	#DANGER (potentially?)
+	
+	#DANGER (potentially?) (using .INF in this situation feels wrong)
 	$boid_particles.visibility_rect = Rect2(-Vector2.INF, Vector2.INF)
 	
 	
 	
-	if SIMULATE_GPU:
-		_setup_compute_shader()
-		
-		_update_boids_gpu(0)
+	
+	_setup_compute_shader()
+	
+	_update_boids_gpu(0)
+	
 	
 	
 	#destroys the now-useless buffers
@@ -146,13 +167,14 @@ func _ready():
 	boid_vel .clear()
 	
 
-func _generate_boids():
+## FIX LATER
+func _initial_boid_setup():
 	
 	var array_o_boids:Array[int]
 	array_o_boids.resize(NUM_BOIDS)
-	boid_pos.resize(NUM_BOIDS)
-	boid_vel.resize(NUM_BOIDS)
-	squad_indeces.resize(NUM_BOIDS)
+	boid_pos.resize(MAX_BOIDS)
+	boid_vel.resize(MAX_BOIDS)
+	squad_indeces.resize(MAX_BOIDS)
 	
 	for i in NUM_BOIDS:
 		
@@ -191,17 +213,16 @@ func _process(delta):
 	
 	
 	
-	
-	
 	for s in squads:
 		
 		s.update(delta)
 		
 	
 	
+	#excecute any queued actions
 	
 	_update_squad_bias_uniform()
-		
+	_update_boid_colors()
 	
 	
 	
@@ -230,6 +251,7 @@ func _draw() -> void:
 	pass
 
 func _update_boids_gpu(delta):
+	
 	rd.free_rid(params_buffer)
 	params_buffer = _generate_parameter_buffer(delta)
 	params_uniform.clear_ids()
@@ -241,9 +263,9 @@ func _update_boids_gpu(delta):
 	rd.compute_list_bind_uniform_set(compute_list, uniform_set, 0)
 	
 	#DANGER not really actually, im just not sure if 128 is the right number
-	#rd.compute_list_dispatch(compute_list, floor(NUM_BOIDS/128.), 1, 1)
+	#rd.compute_list_dispatch(compute_list, ceil(NUM_BOIDS/128.), 1, 1)
 	#Magic number!! 157 * 128 = 20096
-	rd.compute_list_dispatch(compute_list, 157, 1, 1)
+	rd.compute_list_dispatch(compute_list, NUM_WORKGROUPS, 1, 1)
 	rd.compute_list_end()
 	rd.submit()
 		
@@ -255,25 +277,18 @@ func _sync_boids_gpu():
 func _update_data_texture():
 	
 	
-	#if Engine.get_frames_drawn() == 1:
-		
-		#double checking to make sure that they actually exist at this point in time
-		#get_node("../SelectionBox").selectionRect = Rect2(-INF, -INF, INF, INF)
-		
-	#	get_node("../SelectionBox")._finalize_selection_gpu()
+	
+	var boid_data_image_data:PackedByteArray = rd.texture_get_data(boid_data_buffer, 0)
+	boid_data.set_data(IMAGE_SIZE, IMAGE_SIZE, false, Image.FORMAT_RGBAF, boid_data_image_data)
 	
 	
-	if SIMULATE_GPU:
-		var boid_data_image_data:PackedByteArray = rd.texture_get_data(boid_data_buffer, 0)
-		boid_data.set_data(IMAGE_SIZE, IMAGE_SIZE, false, Image.FORMAT_RGBAF, boid_data_image_data)
+	
 	
 	
 	#updates boid_pos_active
 	var boid_pos_bytes:PackedByteArray = boid_data.get_data()
 	boid_pos_active = boid_pos_bytes.to_color_array()
 	
-	#if Engine.get_frames_drawn() == 1:
-	#	get_node("../SelectionBox")._finalize_selection_gpu()
 	
 	boid_data_texture.update(boid_data)
 	
@@ -334,35 +349,38 @@ func _generate_parameter_buffer(delta):
 		#useless as of rn
 		min_vel, 
 		max_vel,
+		
 		alignment_factor,
 		cohesion_factor,
 		separation_factor,
 		damp_factor,
+		#remove soon
 		get_viewport_rect().size.x,
 		get_viewport_rect().size.y,
+		
 		delta]).to_byte_array()
 	
 	return rd.storage_buffer_create(params_buffer_bytes.size(), params_buffer_bytes)
 
 func _exit_tree():
-	if SIMULATE_GPU:
-		_sync_boids_gpu()
-		
-		
-		#DANGER -> for some reason if this isnt commented out i get an error
-		#upon reloading the scene
-		#rd.free_rid(uniform_set)
-		rd.free_rid(boid_data_buffer)
-		rd.free_rid(params_buffer)
-		rd.free_rid(boid_pos_buffer)
-		rd.free_rid(boid_vel_buffer)
-		rd.free_rid(pipeline)
-		rd.free_rid(boid_compute_shader)
-		rd.free_rid(squad_bias_buffer)
-		
-		
-		
-		rd.free()
+	
+	_sync_boids_gpu()
+	
+	
+	#DANGER -> for some reason if this isnt commented out i get an error
+	#upon reloading the scene
+	#rd.free_rid(uniform_set)
+	rd.free_rid(boid_data_buffer)
+	rd.free_rid(params_buffer)
+	rd.free_rid(boid_pos_buffer)
+	rd.free_rid(boid_vel_buffer)
+	rd.free_rid(pipeline)
+	rd.free_rid(boid_compute_shader)
+	rd.free_rid(squad_bias_buffer)
+	
+	
+	
+	rd.free()
 
 
 func set_selected_bias(new_bias:Vector2):
@@ -386,11 +404,11 @@ func select_boids(new_selection:Array[int]):
 		var new_color: Color = Color.from_ok_hsl(randf(), .8, .8)
 		squads[selection_squad].set_color(new_color)
 		
+		
+		
 	
 	
 	if new_selection.is_empty():
-		
-		$boid_particles.process_material.set_shader_parameter("color", squad_color)
 		
 		selection_squad = -1
 		return
@@ -401,10 +419,7 @@ func select_boids(new_selection:Array[int]):
 	
 	#remeves selected boids from whatever squads they were in
 	for b:int in new_selection:
-	
 		
-		#b is now selected
-		#is_selected[b] = true
 		
 		var squad_getting_removed_from:int = int(squad_indeces[b].x)
 		
@@ -448,10 +463,6 @@ func select_boids(new_selection:Array[int]):
 		
 	
 	
-	
-	#colors selected boids
-	$boid_particles.process_material.set_shader_parameter("color", squad_color)
-	
 	pass
 
 
@@ -478,9 +489,6 @@ func select_squad(new_selection_squad:int):
 	
 	selection_squad = new_selection_squad
 	
-	
-	$boid_particles.process_material.set_shader_parameter("color", squad_color)
-	
 	pass
 
 
@@ -499,3 +507,47 @@ func _update_squad_bias_uniform():
 	
 	
 	update_squad_bias_uniform = false
+
+func queue_update_boid_colors():
+	
+	update_boid_color_tex = true
+
+func _update_boid_colors():
+	
+	if !update_boid_color_tex:
+		return
+	
+	var boid_colors_image_data:PackedByteArray = boid_colors.to_byte_array()
+	boid_colors_image.set_data(IMAGE_SIZE, IMAGE_SIZE, false, Image.FORMAT_RGBAF, boid_colors_image_data)
+	
+	boid_colors_texture.update(boid_colors_image)
+	
+	pass
+
+
+## changes num_boids, changes max_boids and tex if necissary, updates relevant uniforms
+func _add_boids():
+	
+	
+	
+	
+	
+	pass
+
+
+## changes num_boids, changes max_boids and tex if necissary, updates relevant uniforms
+func _remove_boids():
+	
+	NUM_BOIDS -= 1000
+	
+	
+	$boid_particles.amount = NUM_BOIDS
+	
+	
+	
+	#boid_pos.resize(MAX_BOIDS)
+	#boid_vel.resize(MAX_BOIDS)
+	#squad_indeces.resize(MAX_BOIDS)
+	
+	
+	pass

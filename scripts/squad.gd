@@ -26,7 +26,7 @@ func _init(new_units:Array[int], squad_num:int, new_goal:Vector2 = Vector2.INF, 
 		
 		boid_manager.squad_indeces[new_units[i]] = Vector2(squad_num, i)
 		
-		boid_manager.squad_color[new_units[i]] = new_color
+		boid_manager.boid_colors[new_units[i]] = new_color
 		
 		#if squadnum == 0, color = ugly blue, else random oklab
 		#Color.SKY_BLUE
@@ -95,7 +95,7 @@ func update(_delta:float):
 		var new_location: Vector2 = Vector2.ZERO
 		for b in units:
 			
-			#sums locations for new av location
+			#sums locations for new appx location
 			var unit_location_color:Color = boid_manager.boid_pos_active[b]
 			var unit_location:Vector2 = Vector2(unit_location_color.r, unit_location_color.g)
 			new_location += unit_location
@@ -123,7 +123,7 @@ func update(_delta:float):
 	if goal.distance_squared_to(appx_location) < 16:
 		
 		set_bias(Vector2.INF)
-		##OR turn of formation - probably not honestly
+		##OR turn off formation - probably not honestly
 		
 		print("Goal reached!")
 		
@@ -151,6 +151,7 @@ func set_formation():
 	
 	formation = new_formation
 	
+	#DANGER dont like this
 	for i in units.size():
 		
 		boid_manager.squad_biases[units[i]] = formation.pos[i] + formation.location
@@ -167,6 +168,11 @@ func set_color(new_color:Color):
 	
 	for i in units.size():
 		
-		boid_manager.squad_color[units[i]] = new_color
+		boid_manager.boid_colors[units[i]] = new_color
+		
+		
 	
 	color = new_color
+	
+	boid_manager.queue_update_boid_colors()
+	
