@@ -2,6 +2,9 @@ extends Node2D
 
 var dragging:bool = false
 var selectionRect:Rect2
+@export var mode:BOX_MODE = BOX_MODE.SELECT
+enum BOX_MODE {SELECT, DELETE}
+
 @export var boid_manager:Node
 
 # Called when the node enters the scene tree for the first time.
@@ -88,12 +91,18 @@ func _finalize_selection_gpu():
 		curr_boid_pos = boid_manager.boid_pos_active[b]
 		
 		if selectionRect.has_point(Vector2(curr_boid_pos.r, curr_boid_pos.g)):
+			
 			to_select.append(b)
 			
-			
 	
 	
-	boid_manager.select_boids(to_select)
+	
+	match mode:
+		BOX_MODE.SELECT:
+			boid_manager.select_boids(to_select)
+		BOX_MODE.DELETE:
+			boid_manager.delete_boids(to_select)
+	
 	
 	boid_manager.squads_updated.emit()
 	

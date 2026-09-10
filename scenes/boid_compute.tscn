@@ -9,6 +9,7 @@
 [ext_resource type="Script" uid="uid://236saenw6w3s" path="res://scripts/flag.gd" id="5_k0nt5"]
 [ext_resource type="Script" uid="uid://c03c25r226vyr" path="res://scripts/selection_box.gd" id="6_f8if2"]
 [ext_resource type="Script" uid="uid://dpsvd5qyoodon" path="res://scripts/UI/squad_list.gd" id="9_cpftq"]
+[ext_resource type="Script" uid="uid://bn8axymrol8io" path="res://scripts/UI/select_box_options.gd" id="10_k0nt5"]
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_o08vg"]
 shader = ExtResource("2_cpftq")
@@ -63,5 +64,19 @@ focus_mode = 0
 script = ExtResource("9_cpftq")
 boid_manager = NodePath("../../BoidCompute")
 
+[node name="OptionButton" type="OptionButton" parent="UiLayer" unique_id=1870982992 node_paths=PackedStringArray("selection_box")]
+offset_right = 40.0
+offset_bottom = 20.0
+focus_mode = 0
+selected = 0
+item_count = 2
+popup/item_0/text = "SELECT"
+popup/item_0/id = 0
+popup/item_1/text = "DELETE"
+popup/item_1/id = 1
+script = ExtResource("10_k0nt5")
+selection_box = NodePath("../../SelectionBox")
+
 [connection signal="squads_updated" from="BoidCompute" to="UiLayer/SquadList" method="_on_squads_updated"]
 [connection signal="item_selected" from="UiLayer/SquadList" to="UiLayer/SquadList" method="_on_item_selected"]
+[connection signal="item_selected" from="UiLayer/OptionButton" to="UiLayer/OptionButton" method="_on_item_selected"]

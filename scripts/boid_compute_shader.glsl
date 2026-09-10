@@ -66,8 +66,14 @@ void main() {
 	
 	int index = int(gl_GlobalInvocationID.x);
 
-	if (index >= params.num_boids)
+
+
+	//having this just makes some things cleaner
+	if (index >= params.num_boids){
 		return;
+	}
+
+
 
 	vec2 position = boid_pos.data[index];
 	vec2 velocity = boid_vel.data[index];
@@ -211,7 +217,7 @@ void main() {
 
 
 	
-	imageStore(boid_data, pixel_pos, vec4(position.x, position.y, 0, 1));
+	imageStore(boid_data, pixel_pos, vec4(position.x, position.y, velocity.x, velocity.y));
 
 }
 

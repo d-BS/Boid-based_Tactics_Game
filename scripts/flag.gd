@@ -16,7 +16,6 @@ func _process(_delta: float) -> void:
 		if boid_manager.selection_squad != -1:
 			boid_manager.squads[boid_manager.selection_squad].set_formation()
 			
-			Squad.f_just_pressed = true
 			
 		pass
 	

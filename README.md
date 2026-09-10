@@ -12,7 +12,8 @@
 ## Known issues:
 	
 	There are still a few kinks that need to be worked out with the GPU boids
-		-  The number of boids atm is completely hardcoded
+		-  There are a handful that refuse to cooperate, and really want to be nan
+		-  Deletion is still unstable
 	
 	GPU boids use naive O(N^2) implementation, I will get to making that better later
 	

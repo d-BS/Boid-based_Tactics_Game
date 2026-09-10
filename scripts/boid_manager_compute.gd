@@ -19,13 +19,16 @@ var NUM_WORKGROUPS:int = MAX_BOIDS / 128
 #
 #Have goal-less boids removed from squad structure overall?
 #
+#Debug mystery 40 stuck at origin / nan
+#
+#fix deletion wierdness
+#
 #
 #add more kinds of formations, remove hardcoding
 #have finer-tune control of formation during gameplay, add ui for this
 #
 #detangle formation.location and goal, that was a bad idea
 #
-#>>>>>>>Make NUM_BOIDS dynamic rather than hardcoded
 #be able to create boids, have boids be killed, etc
 #
 #
@@ -35,13 +38,9 @@ var NUM_WORKGROUPS:int = MAX_BOIDS / 128
 #to get bin # for each boid, we:
 #vec2i bin_pair = int(pos / vision_rad)
 #
-#bin_pair.x = bin_pair.x < 0 ? 2 * -bin_pair.x - 1 : 2 * bin_pair.x
-#(same w y)
+#predertermined # of bins / arena size
 #
-#int bin_num = (x + y) * (x + y + 1) / 2 + y
-#
-#bin_list.insert_at(bin_list.bsearch(bin_num), vec2(bin_num, boid_id))
-#
+#matrix stores first boid in bin, array which stores next boid in bin
 #
 #
 #
@@ -55,8 +54,7 @@ var NUM_WORKGROUPS:int = MAX_BOIDS / 128
 var boid_pos:PackedVector2Array = []
 var boid_vel:PackedVector2Array = []
 var squad_biases:PackedVector2Array = []
-## Stores bin #, boid id #
-var bin_list:PackedVector2Array = []
+
 
 
 ## contains positions of boids, and is actively updated
@@ -116,6 +114,8 @@ var boid_data_buffer : RID
 var update_squad_bias_uniform:bool = false
 var update_boid_color_tex:bool = false
 
+var remove_from_buffer:Array[int] = []
+
 
 @warning_ignore("unused_signal")
 signal squads_updated
@@ -124,8 +124,6 @@ signal squads_updated
 func _ready():
 	
 	#seed(0)
-	
-	print(MAX_BOIDS)
 	
 	boid_data = Image.create_empty(IMAGE_SIZE, IMAGE_SIZE, false, Image.FORMAT_RGBAF)								
 	boid_data_texture = ImageTexture.create_from_image(boid_data)
@@ -164,7 +162,7 @@ func _ready():
 	
 	#destroys the now-useless buffers
 	boid_pos.clear()
-	boid_vel .clear()
+	boid_vel.clear()
 	
 
 ## FIX LATER
@@ -228,8 +226,6 @@ func _process(delta):
 	
 	queue_redraw()
 	
-	Squad.f_just_pressed = false
-	
 
 
 
@@ -256,6 +252,13 @@ func _update_boids_gpu(delta):
 	params_buffer = _generate_parameter_buffer(delta)
 	params_uniform.clear_ids()
 	params_uniform.add_id(params_buffer)
+	
+	
+	#we update size and velocity buffers here!!!
+	_swap_buffer_vals()
+	
+	
+	
 	uniform_set = rd.uniform_set_create(bindings, boid_compute_shader, 0)
 	
 	var compute_list := rd.compute_list_begin()
@@ -280,9 +283,6 @@ func _update_data_texture():
 	
 	var boid_data_image_data:PackedByteArray = rd.texture_get_data(boid_data_buffer, 0)
 	boid_data.set_data(IMAGE_SIZE, IMAGE_SIZE, false, Image.FORMAT_RGBAF, boid_data_image_data)
-	
-	
-	
 	
 	
 	#updates boid_pos_active
@@ -494,6 +494,7 @@ func select_squad(new_selection_squad:int):
 
 func queue_update_squad_bias_uniform():
 	update_squad_bias_uniform = true
+
 func _update_squad_bias_uniform():
 	
 	if ! update_squad_bias_uniform:
@@ -526,8 +527,10 @@ func _update_boid_colors():
 
 
 ## changes num_boids, changes max_boids and tex if necissary, updates relevant uniforms
+## perhaps do this over several frames?
 func _add_boids():
 	
+	_resize_boid_lists()
 	
 	
 	
@@ -536,18 +539,122 @@ func _add_boids():
 
 
 ## changes num_boids, changes max_boids and tex if necissary, updates relevant uniforms
-func _remove_boids():
+func delete_boids(selection:Array[int]):
 	
-	NUM_BOIDS -= 1000
+	#DANGER I want to get rid of this
+	selection.sort()
+	selection.reverse()
+	
+	remove_from_buffer = selection
+	
+	for b in selection:
+		_delete_boid(b)
 	
 	
-	$boid_particles.amount = NUM_BOIDS
+	
+	if NUM_BOIDS <= 0:
+		NUM_BOIDS = 1
 	
 	
+	
+	
+	_resize_boid_lists()
 	
 	#boid_pos.resize(MAX_BOIDS)
 	#boid_vel.resize(MAX_BOIDS)
 	#squad_indeces.resize(MAX_BOIDS)
+	
+	pass
+
+func _delete_boid(to_delete:int):
+	
+	NUM_BOIDS -= 1
+	
+	
+	var to_delete_indeces:Vector2i = squad_indeces[to_delete]
+	var last_active_indeces:Vector2i = squad_indeces[NUM_BOIDS]
+	
+	_swap_vals(squad_indeces, to_delete, NUM_BOIDS)
+	_swap_vals(squad_biases, to_delete, NUM_BOIDS)
+	_swap_vals(boid_colors, to_delete, NUM_BOIDS)
+	
+	
+	
+	squads[last_active_indeces.x].units[last_active_indeces.y] = to_delete
+	squads[to_delete_indeces.x].units[to_delete_indeces.y] = NUM_BOIDS
+	
+	squads[to_delete_indeces.x].remove_boid(to_delete_indeces.y)
+	
+	
+	
+	
+	
+	#remove_from_buffer.append(to_delete)
+	
+	pass
+
+## Swaps two given indeces in given array/vector/dict/ anything using '[]' operator
+func _swap_vals(array: Variant, first:int, second:int):
+	
+	if first == second:
+		return
+	
+	var temp:Variant = array[first]
+	array[first] = array[second]
+	array[second] = temp
+
+
+## perhaps do this over several frames?
+func _swap_buffer_vals():
+	
+	if remove_from_buffer == []:
+		return
+	
+	var last_index:int = NUM_BOIDS + remove_from_buffer.size()
+	
+	
+	var pos_swap:PackedVector2Array = rd.buffer_get_data(boid_pos_buffer).to_vector2_array()
+	var vel_swap:PackedVector2Array = rd.buffer_get_data(boid_vel_buffer).to_vector2_array()
+	
+	
+	for b in remove_from_buffer:
+		
+		
+		last_index -= 1
+		
+		if b >= last_index:
+			continue
+		
+		
+		_swap_vals(pos_swap, b, last_index)
+		_swap_vals(vel_swap, b, last_index)
+		
+		
+		
+		
+		pass
+	
+	
+	var pos_bytes:PackedByteArray = pos_swap.to_byte_array()
+	var vel_bytes:PackedByteArray = vel_swap.to_byte_array()
+	
+	
+	rd.buffer_update(boid_pos_buffer, 0, pos_bytes.size(), pos_bytes)
+	rd.buffer_update(boid_vel_buffer, 0, vel_bytes.size(), vel_bytes)
+	
+	
+	$boid_particles.amount = NUM_BOIDS
+	
+	remove_from_buffer = []
+	
+	pass
+
+
+func _resize_boid_lists():
+	
+	
+	
+	
 	
 	
 	pass

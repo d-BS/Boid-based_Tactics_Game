@@ -7,10 +7,6 @@ var goal: Vector2 = Vector2.INF
 var color:Color
 var formation:Formation = null
 
-#ACTUALLY WHY IS THIS DOING ANYTHING???
-#if I get rid of this variable WHICH DOES NOTHING
-#then it crashes whenever i make a formation
-static var f_just_pressed:bool = false
 
 var update_uniform:bool = false
 
@@ -79,6 +75,9 @@ func set_bias(new_bias:Vector2):
 	
 
 func update(_delta:float):
+	
+	if(units.size() == 0):
+		return
 	
 	#makes sure only one squad does work per frame
 	var avg_pos_needed:bool = (Engine.get_frames_drawn() + squad_id) % num_of_squads == 0
