@@ -86,7 +86,7 @@ func _finalize_selection_gpu():
 	var curr_boid_pos:Color
 	
 	
-	for b in boid_manager.NUM_BOIDS:
+	for b in boid_manager.num_boids:
 		
 		curr_boid_pos = boid_manager.boid_pos_active[b]
 		

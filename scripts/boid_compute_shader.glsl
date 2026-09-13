@@ -10,7 +10,6 @@
 
 //flat 128 threads.
 //1024 from the tutorial didn't work for me, so I settled on this.
-//maybe try 16 x 16 later
 
 layout(local_size_x = 128, local_size_y = 1, local_size_z = 1) in;
 
@@ -29,25 +28,36 @@ layout(set = 0, binding = 2, std430) restrict buffer SquadBias{
 	vec2 data[];
 } squad_bias;
 
+//holds first / length
+layout(set = 0, binding = 3, std430) restrict buffer BinMatrix{
+	int data[];
+} bin_mat;
+
+layout(set = 0, binding = 4, std430) restrict buffer BinNext{
+	int data[];
+} bin_next;
+
 //parameter buffer
-layout(set = 0, binding = 3, std430) restrict buffer Params{
+layout(set = 0, binding = 5, std430) restrict buffer Params{
 	float num_boids;
     float image_size;
     float vision_rad;
     float avoid_rad;
 
-	//Currently doing nothing
-    float min_vel;
-    float max_vel;
+	float bin_h;
+	float bin_w;
+
+	float bin_offset_x;
+	float bin_offset_y;
+
 
     float alignment_factor;
     float cohesion_factor;
     float avoidance_factor;
     float damp_factor;
 
-	//also doing nothing
-    float viewport_x;
-    float viewport_y;
+	
+	float pass_number;
 
     float delta_time;
 } params;
@@ -59,13 +69,37 @@ layout(set = 0, binding = 3, std430) restrict buffer Params{
 
 //image out
 //formerly rgba16f
-layout(rgba32f, binding = 4) uniform image2D boid_data;
+layout(rgba32f, binding = 6) uniform image2D boid_data;
+
+
+
+//function prototypes
+void binning_pass();
+void boid_physics_pass();
+void loop_over_bin(int);
+void boid_loop_interior(int);
+int get_bindex();
+
+
+
+//unique identifier for this instance
+int index = int(gl_GlobalInvocationID.x);
+
+
+//these variables are more convenient to have here
+int num_neighbors = 0;
+
+int avoid_neighbors = 0;
+vec2 avoid_direction = vec2(0,0);
+vec2 avoid_velocity_ave = vec2(0,0);
+
+vec2 average_velocity = vec2(0,0);
+vec2 average_position = vec2(0,0);
 
 
 void main() {
 	
-	int index = int(gl_GlobalInvocationID.x);
-
+	
 
 
 	//having this just makes some things cleaner
@@ -75,10 +109,18 @@ void main() {
 
 
 
+	if (params.pass_number == 0.0)
+		binning_pass();
+	else if(params.pass_number == 1.0)
+		boid_physics_pass();
+	
+	
+}
+
+void boid_physics_pass() {
+
 	vec2 position = boid_pos.data[index];
 	vec2 velocity = boid_vel.data[index];
-
-
 
 
 	//last resort catches
@@ -91,56 +133,24 @@ void main() {
 
 
 
-
-
-
-	int num_neighbors = 0;
 	
-	int avoid_neighbors = 0;
-	vec2 avoid_direction = vec2(0,0);
-	vec2 avoid_velocity_ave = vec2(0,0);
-
-	vec2 average_velocity = vec2(0,0);
-	vec2 average_position = vec2(0,0);
 
 	//bool kicker = velocity.length() >= wakeup cutoff
 
 
-	for(int i = 0; i < params.num_boids; i++){
+	//for(int i = 0; i < params.num_boids; i++){
 
-		if(i!=index){
+	//	boid_loop_interior(i);
+	//}
 
-			vec2 b_pos = boid_pos.data[i];
-			vec2 b_vel = boid_vel.data[i];
+	int bindex = get_bindex();
+	int[9] neighborhood = {-1, 0, 1, int(-params.bin_w - 1), int(-params.bin_w), int(-params.bin_w + 1), int(params.bin_w - 1), int(params.bin_w), int(params.bin_w + 1)};
 
-			float distance = distance(position, b_pos);
+	for(int i = 0; i < 9; i++){
 
-			if(distance < params.vision_rad){
-
-
-				num_neighbors++;
-
-				if(distance <= params.avoid_rad){
-					avoid_neighbors++;
-					avoid_direction += position - b_pos;
-					avoid_velocity_ave += b_vel;
-
-					//if is sleeping
-					//wake
-				}
-
-				//if b not sleeping
-
-				average_velocity += b_vel;
-				average_position += b_pos;
-
-				//else if kicker
-				//wake
-
-			}
-
-		}
+		loop_over_bin(neighborhood[i] + bindex);
 	}
+
 
 
 
@@ -153,6 +163,7 @@ void main() {
 		//applies average position
 		velocity += (average_position / num_neighbors - position) * params.cohesion_factor * params.delta_time;
 	}
+
 
 
 	//Formerly
@@ -188,12 +199,13 @@ void main() {
 
 		//makes avoid dir stronger the closer the boids are together
 		//magic nums formerly 1.25, 2
-		avoid_direction = -avoid_direction * 2.5 + normalize(avoid_direction) * params.avoid_rad * 3;
+		//avoid_direction = -avoid_direction * 2.5 + normalize(avoid_direction) * params.avoid_rad * 3;
 
 
 		//takes the weighted average of current velocity and colliding velocities
 		//adds avoidance vector, for final semi-elastic collision
-		float self_v_weight = .2;
+		//make this tunable - boinginess?
+		float self_v_weight = .1;
 		velocity = (avoid_velocity_ave * self_v_weight + velocity) / (1 + self_v_weight) + (avoid_direction * params.avoidance_factor);
 		
 
@@ -219,5 +231,113 @@ void main() {
 	
 	imageStore(boid_data, pixel_pos, vec4(position.x, position.y, velocity.x, velocity.y));
 
+
 }
 
+
+
+
+
+
+void boid_loop_interior(int i){
+
+	if(i!=index){
+
+		vec2 b_pos = boid_pos.data[i];
+		vec2 b_vel = boid_vel.data[i];
+		vec2 position = boid_pos.data[index];
+
+		float distance = distance(position, b_pos);
+
+		if(distance < params.vision_rad){
+
+
+			num_neighbors++;
+
+			if(distance <= params.avoid_rad){
+				avoid_neighbors++;
+
+				vec2 to_add = position - b_pos;
+
+
+				//make this into a tunable variable?
+				//DANGER pls try to remove normalize
+				avoid_direction += -to_add * 9.6 + normalize(to_add) * params.avoid_rad * 10;
+
+
+				//avoid_direction += position - b_pos;
+				avoid_velocity_ave += b_vel;
+
+			}
+
+			average_velocity += b_vel;
+			average_position += b_pos;
+
+		}
+
+	}
+
+}
+
+
+void loop_over_bin(int bindex){
+
+	if(bindex < 0 || bindex >= params.bin_h * params.bin_w)
+		return;
+
+	int to_check = bin_mat.data[bindex];
+
+	while(to_check != -1){
+
+		boid_loop_interior(to_check);
+		to_check = bin_next.data[to_check];
+	}
+}
+
+
+
+
+
+
+
+
+void binning_pass() {
+
+	
+	//first, find location relative to bins
+	//find bin
+	//add to bin
+
+	
+
+	int bindex = get_bindex();
+
+	if(bindex == -1)
+		return;
+
+
+	int old_head = atomicExchange(bin_mat.data[bindex], index);
+	bin_next.data[index] = old_head;
+
+	return;
+
+}
+
+
+
+int get_bindex(){
+
+
+	vec2 position = boid_pos.data[index];
+	vec2 bin_pos = (position - vec2(params.bin_offset_x, params.bin_offset_y)) / params.vision_rad;
+
+
+	int bx = int(floor(bin_pos.x));
+    int by = int(floor(bin_pos.y));
+
+	if (bx < 0 || bx >= params.bin_w) return -1;
+    if (by < 0 || by >= params.bin_h) return -1;
+
+	return int(bx + (by * params.bin_w));
+
+}

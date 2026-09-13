@@ -2,16 +2,16 @@ extends Node2D
 var DEBUG_LOG = false
 
 ## current number of boids
-var NUM_BOIDS:int = 25000
+var num_boids:int = 200000
 
 ## maximum boids that current setup can handle w/o reallocating stuff, 
 ## set to nearest multiple of 128
-var MAX_BOIDS:int = NUM_BOIDS + (0 if (NUM_BOIDS % 128 == 0) else (128 - NUM_BOIDS % 128))
+var max_boids:int = num_boids + (0 if (num_boids % 128 == 0) else (128 - num_boids % 128))
 
-#var MAX_BOIDS = 20096
+#var max_boids = 20096
 
 @warning_ignore("integer_division")
-var NUM_WORKGROUPS:int = MAX_BOIDS / 128
+var num_workgroups:int = max_boids / 128
 
 
 #TODO:
@@ -21,16 +21,22 @@ var NUM_WORKGROUPS:int = MAX_BOIDS / 128
 #
 #Debug mystery 40 stuck at origin / nan
 #
-#fix deletion wierdness
+#fix deletion wierdness or at least understand why its happening
 #
+#split boid manager into cpu-focused script and gpu-focused script?
+#I think that may be better than the mess I have now
 #
 #add more kinds of formations, remove hardcoding
 #have finer-tune control of formation during gameplay, add ui for this
 #
 #detangle formation.location and goal, that was a bad idea
+#OR give formation no matter what with goal, just have current positions be formation
 #
 #be able to create boids, have boids be killed, etc
 #
+#
+#
+#make pos_buffer/vel_buffer single vec4 array
 #
 #
 #Binning: Boids only check their own bin, orthoganal bins
@@ -55,6 +61,13 @@ var boid_pos:PackedVector2Array = []
 var boid_vel:PackedVector2Array = []
 var squad_biases:PackedVector2Array = []
 
+var bin_dims:Vector2 = Vector2(1000, 1000)
+var bin_offset:Vector2 = -bin_dims * 35 / 5
+var bin_first:PackedInt32Array = []
+var bin_next:PackedInt32Array = []
+
+
+
 
 
 ## contains positions of boids, and is actively updated
@@ -73,7 +86,7 @@ var selection_squad:int = -1
 var empty_squads:Array[int] = []
 
 #textures that store information for particle shader
-var IMAGE_SIZE:int = int(ceil(sqrt(MAX_BOIDS)))
+var IMAGE_SIZE:int = int(ceil(sqrt(max_boids)))
 var boid_data : Image
 var boid_data_texture : ImageTexture
 var boid_colors_image : Image
@@ -92,22 +105,42 @@ var alignment_factor:float = -.7
 #formerly -.05
 var cohesion_factor:float = -.05
 #formerly 10, then 15 w old formula, .25 w new
-var separation_factor:float = .25
+var separation_factor:float = .3
 var damp_factor:float = 1.5
+
 
 # GPU Variables
 var rd : RenderingDevice
 var boid_compute_shader : RID
 var pipeline : RID
-var bindings : Array
-var uniform_set : RID
 
+var bindings_0 : Array
+var bindings_1 : Array
+var uniform_set_0 : RID
+var uniform_set_1 : RID
+
+#buffers
 var boid_pos_buffer : RID
 var boid_vel_buffer : RID
 var squad_bias_buffer:RID
-var params_buffer: RID
-var params_uniform : RDUniform
+var bin_matrix_buffer : RID
+var bin_next_buffer : RID
+var params_buffer_0 : RID
+var params_buffer_1 : RID
 var boid_data_buffer : RID
+
+#uniforms
+var boid_pos_uniform : RDUniform
+var boid_vel_uniform : RDUniform
+var squad_bias_uniform : RDUniform
+var bin_matrix_uniform : RDUniform
+var bin_next_uniform : RDUniform
+var params_uniform_0 : RDUniform
+var params_uniform_1 : RDUniform
+var boid_data_buffer_uniform : RDUniform
+
+
+
 
 #different queue variables
 
@@ -131,19 +164,22 @@ func _ready():
 	boid_colors_texture = ImageTexture.create_from_image(boid_colors_image)
 	
 	
-	#REMEMBER TO CHANGE IN GDSHADER
-	squad_biases.resize(MAX_BOIDS)
+	squad_biases.resize(max_boids)
 	squad_biases.fill(Vector2.INF)
 	
 	boid_colors.resize(IMAGE_SIZE * IMAGE_SIZE)
 	boid_colors.fill(Color.BLACK)
 	
+	bin_first.resize(bin_dims.x * bin_dims.y)
+	bin_first.fill(-1)
+	bin_next.resize(max_boids)
+	bin_next.fill(-1)
 	
 	
 	_initial_boid_setup()
 	queue_update_boid_colors()
 	
-	$boid_particles.amount = NUM_BOIDS
+	$boid_particles.amount = num_boids
 	$boid_particles.process_material.set_shader_parameter("boid_data", boid_data_texture)
 	$boid_particles.process_material.set_shader_parameter("boid_colors", boid_colors_texture)
 	
@@ -158,7 +194,7 @@ func _ready():
 	
 	_update_boids_gpu(0)
 	
-	
+	queue_redraw()
 	
 	#destroys the now-useless buffers
 	boid_pos.clear()
@@ -169,14 +205,14 @@ func _ready():
 func _initial_boid_setup():
 	
 	var array_o_boids:Array[int]
-	array_o_boids.resize(NUM_BOIDS)
-	boid_pos.resize(MAX_BOIDS)
-	boid_vel.resize(MAX_BOIDS)
-	squad_indeces.resize(MAX_BOIDS)
+	array_o_boids.resize(num_boids)
+	boid_pos.resize(max_boids)
+	boid_vel.resize(max_boids)
+	squad_indeces.resize(max_boids)
 	
-	for i in NUM_BOIDS:
+	for i in num_boids:
 		
-		boid_pos[i] = Vector2(randf() * get_viewport_rect().size.x * 5, randf()  * get_viewport_rect().size.y * 5)
+		boid_pos[i] = Vector2(randf() * IMAGE_SIZE * 50, randf()  * IMAGE_SIZE * 50)
 		boid_vel[i] = Vector2(randf_range(-1.0, 1.0) * max_vel, randf_range(-1.0, 1.0) * max_vel)
 		array_o_boids[i] = i
 		squad_indeces[i] = Vector2(0, i)
@@ -191,10 +227,7 @@ func _process(delta):
 	
 	
 	
-	get_window().title = "Boids: " + str(NUM_BOIDS) + " / FPS: " + str(Engine.get_frames_per_second())
-	
-	
-	
+	get_window().title = "Boids: " + str(num_boids) + " / FPS: " + str(Engine.get_frames_per_second())
 	
 	
 	
@@ -209,13 +242,10 @@ func _process(delta):
 	
 	
 	
-	
-	
 	for s in squads:
 		
 		s.update(delta)
 		
-	
 	
 	#excecute any queued actions
 	
@@ -223,23 +253,20 @@ func _process(delta):
 	_update_boid_colors()
 	
 	
-	
-	queue_redraw()
-	
 
 
 
 func _draw() -> void:
 	
-	#draw_rect($boid_particles.visibility_rect, Color.AQUA)
+	draw_rect(Rect2(bin_offset, bin_dims * vision_radius), Color.BLUE, false, 30)
 	
-	for s in squads:
+	#for s in squads:
 		
-		if s.formation != null:
-			pass
+	#	if s.formation != null:
+	#		pass
 		
-		elif(!is_inf(s.goal.x)):
-			draw_line(s.goal, s.appx_location, Color.GREEN, 30)
+		#elif(!is_inf(s.goal.x)):
+		#	draw_line(s.goal, s.appx_location, Color.GREEN, 30)
 		#draw_circle(s.appx_location, 10, Color.GREEN)
 		#draw_circle(s.goal, 10, Color.RED)
 		
@@ -248,30 +275,61 @@ func _draw() -> void:
 
 func _update_boids_gpu(delta):
 	
-	rd.free_rid(params_buffer)
-	params_buffer = _generate_parameter_buffer(delta)
-	params_uniform.clear_ids()
-	params_uniform.add_id(params_buffer)
+	#reset perameters each frame
+	rd.free_rid(params_buffer_1)
+	params_buffer_1 = _generate_parameter_buffer(delta, 1)
+	params_uniform_1.clear_ids()
+	params_uniform_1.add_id(params_buffer_1)
+	
+	#reset bins every frame
+	rd.free_rid(bin_matrix_buffer)
+	bin_matrix_buffer = _generate_int_array_buffer(bin_first)
+	bin_matrix_uniform.clear_ids()
+	bin_matrix_uniform.add_id(bin_matrix_buffer)
+	
+	rd.free_rid(bin_next_buffer)
+	bin_next_buffer = _generate_int_array_buffer(bin_next)
+	bin_next_uniform.clear_ids()
+	bin_next_uniform.add_id(bin_next_buffer)
 	
 	
 	#we update size and velocity buffers here!!!
+	#replace w better func later!
 	_swap_buffer_vals()
+	#_update_pos_vel_buffer_vals()
 	
 	
 	
-	uniform_set = rd.uniform_set_create(bindings, boid_compute_shader, 0)
+	uniform_set_0 = rd.uniform_set_create(bindings_0, boid_compute_shader, 0)
+	
+	uniform_set_1 = rd.uniform_set_create(bindings_1, boid_compute_shader, 0)
+	
+	
 	
 	var compute_list := rd.compute_list_begin()
 	rd.compute_list_bind_compute_pipeline(compute_list, pipeline)
-	rd.compute_list_bind_uniform_set(compute_list, uniform_set, 0)
+	rd.compute_list_bind_uniform_set(compute_list, uniform_set_0, 0)
 	
 	#DANGER not really actually, im just not sure if 128 is the right number
-	#rd.compute_list_dispatch(compute_list, ceil(NUM_BOIDS/128.), 1, 1)
-	#Magic number!! 157 * 128 = 20096
-	rd.compute_list_dispatch(compute_list, NUM_WORKGROUPS, 1, 1)
+	
+	#first pass, does binning
+	rd.compute_list_dispatch(compute_list, num_workgroups, 1, 1)
+	#barrier which is important apparently
+	
+	rd.compute_list_add_barrier(compute_list)
+	
+	
+	#second pass
+	
+	rd.compute_list_bind_uniform_set(compute_list, uniform_set_1, 0)
+	rd.compute_list_dispatch(compute_list, num_workgroups, 1, 1)
+	
+	
+	
+	
 	rd.compute_list_end()
 	rd.submit()
-		
+	
 
 ## Recieves work from gpu. is slow if gpu hasn't yet finished
 func _sync_boids_gpu():
@@ -305,16 +363,25 @@ func _setup_compute_shader():
 	pipeline = rd.compute_pipeline_create(boid_compute_shader)
 	
 	boid_pos_buffer = _generate_vec2_buffer(boid_pos)
-	var boid_pos_uniform = _generate_uniform(boid_pos_buffer, RenderingDevice.UNIFORM_TYPE_STORAGE_BUFFER, 0)
+	boid_pos_uniform = _generate_uniform(boid_pos_buffer, RenderingDevice.UNIFORM_TYPE_STORAGE_BUFFER, 0)
 	
 	boid_vel_buffer = _generate_vec2_buffer(boid_vel)
-	var boid_vel_uniform = _generate_uniform(boid_vel_buffer, RenderingDevice.UNIFORM_TYPE_STORAGE_BUFFER, 1)
+	boid_vel_uniform = _generate_uniform(boid_vel_buffer, RenderingDevice.UNIFORM_TYPE_STORAGE_BUFFER, 1)
 	
 	squad_bias_buffer = _generate_vec2_buffer(squad_biases)
-	var squad_bias_uniform = _generate_uniform(squad_bias_buffer, RenderingDevice.UNIFORM_TYPE_STORAGE_BUFFER, 2)
+	squad_bias_uniform = _generate_uniform(squad_bias_buffer, RenderingDevice.UNIFORM_TYPE_STORAGE_BUFFER, 2)
 	
-	params_buffer = _generate_parameter_buffer(0)
-	params_uniform = _generate_uniform(params_buffer, RenderingDevice.UNIFORM_TYPE_STORAGE_BUFFER, 3)
+	bin_matrix_buffer = _generate_int_array_buffer(bin_first)
+	bin_matrix_uniform = _generate_uniform(bin_matrix_buffer, RenderingDevice.UNIFORM_TYPE_STORAGE_BUFFER, 3)
+	
+	bin_next_buffer = _generate_int_array_buffer(bin_next)
+	bin_next_uniform = _generate_uniform(bin_next_buffer, RenderingDevice.UNIFORM_TYPE_STORAGE_BUFFER, 4)
+	
+	params_buffer_0 = _generate_parameter_buffer(0, 0)
+	params_uniform_0 = _generate_uniform(params_buffer_0, RenderingDevice.UNIFORM_TYPE_STORAGE_BUFFER, 5)
+	
+	params_buffer_1 = _generate_parameter_buffer(0, 1)
+	params_uniform_1 = _generate_uniform(params_buffer_1, RenderingDevice.UNIFORM_TYPE_STORAGE_BUFFER, 5)
 	
 	var fmt := RDTextureFormat.new()
 	fmt.width = IMAGE_SIZE
@@ -324,12 +391,18 @@ func _setup_compute_shader():
 	
 	var view := RDTextureView.new()
 	boid_data_buffer = rd.texture_create(fmt, view, [boid_data.get_data()])
-	var boid_data_buffer_uniform = _generate_uniform(boid_data_buffer, RenderingDevice.UNIFORM_TYPE_IMAGE, 4)
+	boid_data_buffer_uniform = _generate_uniform(boid_data_buffer, RenderingDevice.UNIFORM_TYPE_IMAGE, 6)
 	
-	bindings = [boid_pos_uniform, boid_vel_uniform, squad_bias_uniform, params_uniform, boid_data_buffer_uniform]
+	bindings_0 = [boid_pos_uniform, boid_vel_uniform, squad_bias_uniform, bin_matrix_uniform, bin_next_uniform, params_uniform_0, boid_data_buffer_uniform]
+	bindings_1 = [boid_pos_uniform, boid_vel_uniform, squad_bias_uniform, bin_matrix_uniform, bin_next_uniform, params_uniform_1, boid_data_buffer_uniform]
 	
 func _generate_vec2_buffer(data):
 	var data_buffer_bytes := PackedVector2Array(data).to_byte_array()
+	var data_buffer = rd.storage_buffer_create(data_buffer_bytes.size(), data_buffer_bytes)
+	return data_buffer
+
+func _generate_int_array_buffer(data):
+	var data_buffer_bytes := PackedInt32Array(data).to_byte_array()
 	var data_buffer = rd.storage_buffer_create(data_buffer_bytes.size(), data_buffer_bytes)
 	return data_buffer
 
@@ -340,23 +413,26 @@ func _generate_uniform(data_buffer, type, binding):
 	data_uniform.add_id(data_buffer)
 	return data_uniform
 
-func _generate_parameter_buffer(delta):
+func _generate_parameter_buffer(delta, pass_number):
 	var params_buffer_bytes : PackedByteArray = PackedFloat32Array(
-		[NUM_BOIDS, 
+		[num_boids, 
 		IMAGE_SIZE, 
+		
 		vision_radius,
 		avoid_radius,
-		#useless as of rn
-		min_vel, 
-		max_vel,
+		
+		bin_dims.x, 
+		bin_dims.y,
+		
+		bin_offset.x,
+		bin_offset.y,
 		
 		alignment_factor,
 		cohesion_factor,
 		separation_factor,
 		damp_factor,
-		#remove soon
-		get_viewport_rect().size.x,
-		get_viewport_rect().size.y,
+		
+		pass_number,
 		
 		delta]).to_byte_array()
 	
@@ -367,17 +443,35 @@ func _exit_tree():
 	_sync_boids_gpu()
 	
 	
-	#DANGER -> for some reason if this isnt commented out i get an error
-	#upon reloading the scene
-	#rd.free_rid(uniform_set)
-	rd.free_rid(boid_data_buffer)
-	rd.free_rid(params_buffer)
-	rd.free_rid(boid_pos_buffer)
-	rd.free_rid(boid_vel_buffer)
-	rd.free_rid(pipeline)
-	rd.free_rid(boid_compute_shader)
-	rd.free_rid(squad_bias_buffer)
+	if boid_data_buffer.is_valid():
+		rd.free_rid(boid_data_buffer)
+	if params_buffer_0.is_valid():
+		rd.free_rid(params_buffer_0)
+	if params_buffer_1.is_valid():
+		rd.free_rid(params_buffer_1)
+	if boid_pos_buffer.is_valid():
+		rd.free_rid(boid_pos_buffer)
+	if boid_vel_buffer.is_valid():
+		rd.free_rid(boid_vel_buffer)
+	if pipeline.is_valid():
+		rd.free_rid(pipeline)
+	if boid_compute_shader.is_valid():
+		rd.free_rid(boid_compute_shader)
+	if squad_bias_buffer.is_valid():
+		rd.free_rid(squad_bias_buffer)
 	
+	if bin_matrix_buffer.is_valid():
+		rd.free_rid(bin_matrix_buffer)
+	if bin_next_buffer.is_valid():
+		rd.free_rid(bin_next_buffer)
+	
+	#DANGER these two doesn't like being freed
+	if uniform_set_0.is_valid():
+		rd.free_rid(uniform_set_0)
+		pass
+	if uniform_set_1.is_valid():
+		rd.free_rid(uniform_set_1)
+		pass
 	
 	
 	rd.free()
@@ -504,7 +598,9 @@ func _update_squad_bias_uniform():
 	
 	squad_bias_buffer = _generate_vec2_buffer(squad_biases)
 	var squad_bias_uniform = _generate_uniform(squad_bias_buffer, RenderingDevice.UNIFORM_TYPE_STORAGE_BUFFER, 2)
-	bindings[2] = squad_bias_uniform
+	bindings_0[2] = squad_bias_uniform
+	bindings_1[2] = squad_bias_uniform
+	
 	
 	
 	update_squad_bias_uniform = false
@@ -518,6 +614,7 @@ func _update_boid_colors():
 	if !update_boid_color_tex:
 		return
 	
+	#16 bytes per pixel
 	var boid_colors_image_data:PackedByteArray = boid_colors.to_byte_array()
 	boid_colors_image.set_data(IMAGE_SIZE, IMAGE_SIZE, false, Image.FORMAT_RGBAF, boid_colors_image_data)
 	
@@ -528,9 +625,11 @@ func _update_boid_colors():
 
 ## changes num_boids, changes max_boids and tex if necissary, updates relevant uniforms
 ## perhaps do this over several frames?
-func _add_boids():
+func _add_boids(amount:int, area:Rect2):
 	
-	_resize_boid_lists()
+	if num_boids + amount > max_boids:
+		amount = max_boids - num_boids
+	
 	
 	
 	
@@ -541,47 +640,42 @@ func _add_boids():
 ## changes num_boids, changes max_boids and tex if necissary, updates relevant uniforms
 func delete_boids(selection:Array[int]):
 	
-	#DANGER I want to get rid of this
+	#DANGER I want to get rid of this, but Im worried its nessicary
 	selection.sort()
 	selection.reverse()
 	
-	remove_from_buffer = selection
+	remove_from_buffer.append_array(selection)
 	
 	for b in selection:
 		_delete_boid(b)
 	
 	
 	
-	if NUM_BOIDS <= 0:
-		NUM_BOIDS = 1
+	if num_boids <= 0:
+		num_boids = 1
 	
 	
+	$boid_particles.amount = num_boids
 	
-	
-	_resize_boid_lists()
-	
-	#boid_pos.resize(MAX_BOIDS)
-	#boid_vel.resize(MAX_BOIDS)
-	#squad_indeces.resize(MAX_BOIDS)
 	
 	pass
 
 func _delete_boid(to_delete:int):
 	
-	NUM_BOIDS -= 1
+	num_boids -= 1
 	
 	
 	var to_delete_indeces:Vector2i = squad_indeces[to_delete]
-	var last_active_indeces:Vector2i = squad_indeces[NUM_BOIDS]
+	var last_active_indeces:Vector2i = squad_indeces[num_boids]
 	
-	_swap_vals(squad_indeces, to_delete, NUM_BOIDS)
-	_swap_vals(squad_biases, to_delete, NUM_BOIDS)
-	_swap_vals(boid_colors, to_delete, NUM_BOIDS)
+	_swap_vals(squad_indeces, to_delete, num_boids)
+	_swap_vals(squad_biases, to_delete, num_boids)
+	_swap_vals(boid_colors, to_delete, num_boids)
 	
 	
 	
 	squads[last_active_indeces.x].units[last_active_indeces.y] = to_delete
-	squads[to_delete_indeces.x].units[to_delete_indeces.y] = NUM_BOIDS
+	squads[to_delete_indeces.x].units[to_delete_indeces.y] = num_boids
 	
 	squads[to_delete_indeces.x].remove_boid(to_delete_indeces.y)
 	
@@ -607,10 +701,11 @@ func _swap_vals(array: Variant, first:int, second:int):
 ## perhaps do this over several frames?
 func _swap_buffer_vals():
 	
+	
 	if remove_from_buffer == []:
 		return
 	
-	var last_index:int = NUM_BOIDS + remove_from_buffer.size()
+	var last_index:int = num_boids + remove_from_buffer.size()
 	
 	
 	var pos_swap:PackedVector2Array = rd.buffer_get_data(boid_pos_buffer).to_vector2_array()
@@ -643,16 +738,13 @@ func _swap_buffer_vals():
 	rd.buffer_update(boid_vel_buffer, 0, vel_bytes.size(), vel_bytes)
 	
 	
-	$boid_particles.amount = NUM_BOIDS
 	
 	remove_from_buffer = []
 	
 	pass
 
-
-func _resize_boid_lists():
-	
-	
+## change the buffer (once its a single vec4 array) to new values
+func _update_pos_vel_buffer_vals():
 	
 	
 	

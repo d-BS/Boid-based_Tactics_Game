@@ -1,10 +1,11 @@
 class_name Formation
 
+## each position within the formation, centered around 0,0
 var pos:Array[Vector2]
 var size:int
 
-## ie, rect, circle, none, etc
-var formation_style:String
+## ie, rect, circle, mob, etc
+var form_type:String
 
 var spacing:Vector2
 var location:Vector2
@@ -21,8 +22,6 @@ func _init(num_units:int) -> void:
 	cols = floor(row_num)
 	
 	spacing = Vector2(100, 100)
-	
-	create_form()
 	
 	pass
 
@@ -54,7 +53,9 @@ func _update_form():
 	
 	pass
 
-func create_form():
+func create_form_rect():
+	
+	form_type = "rect"
 	
 	pos = []
 	pos.resize(size)
@@ -73,6 +74,21 @@ func create_form():
 		
 		
 		pass
+	
+	
+	pass
+
+func create_form_mob(locations:PackedVector2Array, appx_loc:Vector2 = Vector2.ZERO):
+	
+	form_type = "rect"
+	
+	pos = []
+	pos.resize(size)
+	
+	for i in size:
+		
+		pos[i] = locations[i] - appx_loc
+		
 	
 	
 	pass

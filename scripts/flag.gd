@@ -14,7 +14,7 @@ func _process(_delta: float) -> void:
 	if Input.is_action_just_pressed("F"):
 		
 		if boid_manager.selection_squad != -1:
-			boid_manager.squads[boid_manager.selection_squad].set_formation()
+			boid_manager.squads[boid_manager.selection_squad].set_formation("rect")
 			
 			
 		pass

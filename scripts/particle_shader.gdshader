@@ -1,9 +1,11 @@
 shader_type particles;
+
 uniform sampler2D boid_colors;
 uniform sampler2D boid_data;
 uniform float scale = .5;
 
 void process() {
+	
 	ivec2 pos_image_size = textureSize(boid_data, 0);
 	
 	ivec2 texel_pos = ivec2(int(mod(float(INDEX),float(pos_image_size.x))),
@@ -17,6 +19,7 @@ void process() {
 	TRANSFORM[0].xy = vec2(scale, 0);
 	TRANSFORM[1].xy = vec2(0, scale);
 	TRANSFORM[3].xy = vec2(boid_pos.r, boid_pos.g); 
+	
 	
 	
 	//sets color
