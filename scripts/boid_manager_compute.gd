@@ -2,13 +2,12 @@ extends Node2D
 var DEBUG_LOG = false
 
 ## current number of boids
-var num_boids:int = 200000
+var num_boids:int = 200_000
 
 ## maximum boids that current setup can handle w/o reallocating stuff, 
 ## set to nearest multiple of 128
 var max_boids:int = num_boids + (0 if (num_boids % 128 == 0) else (128 - num_boids % 128))
 
-#var max_boids = 20096
 
 @warning_ignore("integer_division")
 var num_workgroups:int = max_boids / 128
@@ -18,8 +17,6 @@ var num_workgroups:int = max_boids / 128
 #
 #
 #Have goal-less boids removed from squad structure overall?
-#
-#Debug mystery 40 stuck at origin / nan
 #
 #fix deletion wierdness or at least understand why its happening
 #
@@ -39,21 +36,10 @@ var num_workgroups:int = max_boids / 128
 #make pos_buffer/vel_buffer single vec4 array
 #
 #
-#Binning: Boids only check their own bin, orthoganal bins
-#Bins have side len vision_radius
-#to get bin # for each boid, we:
-#vec2i bin_pair = int(pos / vision_rad)
-#
-#predertermined # of bins / arena size
-#
-#matrix stores first boid in bin, array which stores next boid in bin
-#
-#
-#
 #Optimizations for later:
 #
 #Convert vec2 arrays to vec2i arrays / int arrays twice as long?
-#In shader, convert distance to dist^2
+#In shader, convert distance to dist^2, reduce normalize, etc
 #
 
 #buffers-to-be
@@ -155,6 +141,8 @@ signal squads_updated
 
 
 func _ready():
+	
+	#Engine.time_scale = 2
 	
 	#seed(0)
 	
@@ -338,18 +326,16 @@ func _sync_boids_gpu():
 func _update_data_texture():
 	
 	
-	
 	var boid_data_image_data:PackedByteArray = rd.texture_get_data(boid_data_buffer, 0)
 	boid_data.set_data(IMAGE_SIZE, IMAGE_SIZE, false, Image.FORMAT_RGBAF, boid_data_image_data)
 	
 	
 	#updates boid_pos_active
-	var boid_pos_bytes:PackedByteArray = boid_data.get_data()
-	boid_pos_active = boid_pos_bytes.to_color_array()
+	#var boid_pos_bytes:PackedByteArray = boid_data.get_data()
+	boid_pos_active = boid_data_image_data.to_color_array()
 	
 	
 	boid_data_texture.update(boid_data)
-	
 	
 	
 
@@ -499,15 +485,12 @@ func select_boids(new_selection:Array[int]):
 		squads[selection_squad].set_color(new_color)
 		
 		
-		
 	
 	
 	if new_selection.is_empty():
 		
 		selection_squad = -1
 		return
-	
-	
 	
 	
 	
@@ -546,16 +529,12 @@ func select_boids(new_selection:Array[int]):
 		
 	
 	
-	
-	
-	
 	#clears any back bloat
 	while !empty_squads.is_empty() && empty_squads.back() == squads.size() - 1:
 		
 		empty_squads.pop_back()
 		squads.pop_back()
 		
-	
 	
 	pass
 

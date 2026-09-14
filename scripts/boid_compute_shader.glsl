@@ -125,10 +125,10 @@ void boid_physics_pass() {
 
 	//last resort catches
 	//dont like that I need this
-	if (isnan(position.x) || isnan(position.y) || isinf(position.x) || isinf(position.y))
-		position = vec2(0, 0);
-	if (isnan(velocity.x) || isnan(velocity.y) || isinf(velocity.x) || isinf(velocity.y))
-		velocity = vec2(0, 0);
+	//if (isnan(position.x) || isnan(position.y) || isinf(position.x) || isinf(position.y))
+	//	position = vec2(0, 0);
+	//if (isnan(velocity.x) || isnan(velocity.y) || isinf(velocity.x) || isinf(velocity.y))
+	//	velocity = vec2(0, 0);
 
 
 
@@ -225,9 +225,9 @@ void boid_physics_pass() {
 	boid_vel.data[index] = velocity;
 	boid_pos.data[index] = position;
 
-	ivec2 pixel_pos = ivec2(int(mod(index, params.image_size)), int(index / params.image_size));
 
-
+	int img_size_int = int(params.image_size);
+	ivec2 pixel_pos = ivec2(index % img_size_int, index / img_size_int);
 	
 	imageStore(boid_data, pixel_pos, vec4(position.x, position.y, velocity.x, velocity.y));
 

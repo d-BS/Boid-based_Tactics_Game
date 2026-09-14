@@ -6,16 +6,14 @@
 	
 	Simple selection and target setting, basic formation implementaion
 	
-	Basic grass shader I cooked up
+
 
 
 ## Known issues:
 	
 	There are still a few kinks that need to be worked out with the GPU boids
-		-  There are a handful that refuse to cooperate, and really want to be nan
 		-  Deletion is still unstable
 	
-	GPU boids use naive O(N^2) implementation, I will get to making that better later
 	
 
 

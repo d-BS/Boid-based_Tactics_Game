@@ -8,9 +8,10 @@ void process() {
 	
 	ivec2 pos_image_size = textureSize(boid_data, 0);
 	
-	ivec2 texel_pos = ivec2(int(mod(float(INDEX),float(pos_image_size.x))),
+	ivec2 texel_pos = ivec2(int(mod(float(INDEX),float(pos_image_size.x))) - 1,
 							int(float(INDEX)/float(pos_image_size.x)));
-						
+	
+	
 	vec4 boid_pos = texelFetch(boid_data, texel_pos, 0);
 	
 	//mat2 scale_rot_mat = mat2(vec2(cos(boid_pos_rot.b), sin(boid_pos_rot.b)), // First column
