@@ -8,9 +8,9 @@ void process() {
 	
 	ivec2 pos_image_size = textureSize(boid_data, 0);
 	
-	ivec2 texel_pos = ivec2(int(mod(float(INDEX),float(pos_image_size.x))) - 1,
+	ivec2 texel_pos = ivec2(int(mod(float(INDEX),float(pos_image_size.x))),
 							int(float(INDEX)/float(pos_image_size.x)));
-	
+	//ivec2 texel_pos = ivec2(INDEX % pos_image_size.x, (INDEX / pos_image_size.x))
 	
 	vec4 boid_pos = texelFetch(boid_data, texel_pos, 0);
 	

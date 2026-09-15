@@ -71,7 +71,7 @@ func set_bias(new_bias:Vector2):
 			boid_manager.squad_biases[units[i]] = new_bias
 		
 	
-	if formation != null:
+	elif formation != null:
 		formation.location = new_bias
 		
 		for i in units.size():
@@ -161,8 +161,8 @@ func _calc_appx_loc():
 	for b in units:
 		
 		#sums locations for new appx location
-		var unit_location_color:Color = boid_manager.boid_pos_active[b]
-		unit_locations[i] = Vector2(unit_location_color.r, unit_location_color.g)
+		var unit_location:Vector4 = boid_manager.boid_pos_active[b]
+		unit_locations[i] = Vector2(unit_location.x, unit_location.y)
 		new_location += unit_locations[i]
 		
 		i += 1

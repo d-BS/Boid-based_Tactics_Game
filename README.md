@@ -12,7 +12,7 @@
 ## Known issues:
 	
 	There are still a few kinks that need to be worked out with the GPU boids
-		-  Deletion is still unstable
+		-  Deletion broken
 	
 	
 

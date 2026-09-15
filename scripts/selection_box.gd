@@ -83,14 +83,13 @@ func _finalize_selection_gpu():
 	
 	var to_select:Array[int] = []
 	
-	var curr_boid_pos:Color
-	
+	var curr_boid_pos_vel:Vector4
 	
 	for b in boid_manager.num_boids:
 		
-		curr_boid_pos = boid_manager.boid_pos_active[b]
+		curr_boid_pos_vel = boid_manager.boid_pos_active[b]
 		
-		if selectionRect.has_point(Vector2(curr_boid_pos.r, curr_boid_pos.g)):
+		if selectionRect.has_point(Vector2(curr_boid_pos_vel.x, curr_boid_pos_vel.y)):
 			
 			to_select.append(b)
 			

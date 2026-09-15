@@ -1,6 +1,6 @@
 extends Camera2D
 
-var cam_speed:float = 5
+var cam_speed:float = 10
 var zoom_scale_factor:float = 2
 
 ## true = zoom in, false = zoom out

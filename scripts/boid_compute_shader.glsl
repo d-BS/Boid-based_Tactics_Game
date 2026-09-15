@@ -100,8 +100,6 @@ vec2 average_position = vec2(0,0);
 void main() {
 	
 	
-
-
 	//having this just makes some things cleaner
 	if (index >= params.num_boids){
 		return;
@@ -218,9 +216,9 @@ void boid_physics_pass() {
 	//	velocity = normalize(velocity) * params.max_vel;
 	
 
+
 	position += velocity * params.delta_time;
-
-
+	
 
 	boid_vel.data[index] = velocity;
 	boid_pos.data[index] = position;
@@ -230,6 +228,9 @@ void boid_physics_pass() {
 	ivec2 pixel_pos = ivec2(index % img_size_int, index / img_size_int);
 	
 	imageStore(boid_data, pixel_pos, vec4(position.x, position.y, velocity.x, velocity.y));
+
+
+	
 
 
 }
