@@ -27,6 +27,7 @@ var num_workgroups:int = max_boids / 128
 #add more kinds of formations, remove hardcoding
 #have finer-tune control of formation during gameplay, add ui for this
 #
+#have camera limits automatically set to bin size of level
 #
 #be able to create boids, have boids be killed, etc
 #create faction system for this - no friendly fire, etc
@@ -34,6 +35,20 @@ var num_workgroups:int = max_boids / 128
 #
 #
 #make pos_buffer/vel_buffer single vec4 array
+#
+#
+#UI:
+#	Create window for managing each squad:
+#		Color, goal, units, formation etc.
+#		subwindow for each
+#
+#	Time speed
+#		Buttons for: Pause/play, 2x, 5x, (10x?)
+#
+#	Drag control buttons/shortcuts
+#		(S)elect, (D)elete, (click?), make room for more
+#
+#	Main menu/settings
 #
 #
 #Optimizations for later:
@@ -136,7 +151,8 @@ var boid_data_buffer_uniform : RDUniform
 var update_squad_bias_uniform:bool = false
 var update_boid_color_tex:bool = false
 
-var remove_from_buffer:Array[int] = []
+var boids_to_delete:Array[int] = []
+var max_deletions_per_frame = 5000
 
 
 @warning_ignore("unused_signal")
@@ -228,6 +244,13 @@ func _process(delta):
 	
 	
 	
+	
+	
+	
+	
+	
+	
+	
 	_sync_boids_gpu()
 	
 	#RenderingServer.call_on_render_thread(_update_data_texture)
@@ -248,6 +271,7 @@ func _process(delta):
 	#excecute any queued actions
 	_update_squad_bias_uniform()
 	_update_boid_colors()
+	_delete_boids()
 	
 	
 
@@ -275,7 +299,7 @@ func _update_boids_gpu(delta):
 	
 	#we update size and velocity buffers here!!!
 	#replace w better func later!
-	_swap_buffer_vals()
+	_delete_boids_from_buffer()
 	#_update_pos_vel_buffer_vals()
 	
 	
@@ -294,8 +318,9 @@ func _update_boids_gpu(delta):
 	
 	#first pass, does binning
 	rd.compute_list_dispatch(compute_list, num_workgroups, 1, 1)
-	#barrier which is important apparently
 	
+	
+	#barrier which is important apparently
 	rd.compute_list_add_barrier(compute_list)
 	
 	
@@ -640,31 +665,50 @@ func _add_boids(amount:int, _area:Rect2):
 	
 	pass
 
-
-## changes num_boids, changes max_boids and tex if necissary, updates relevant uniforms
-func delete_boids(selection:Array[int]):
-	
-	#DANGER I want to get rid of this, but Im worried its nessicary
-	selection.sort()
-	selection.reverse()
-	
-	remove_from_buffer.append_array(selection)
+func queue_delete_boids(selection:Array[int]):
 	
 	for b in selection:
-		_delete_boid(b)
+		
+		boids_to_delete.insert(boids_to_delete.bsearch(b), b)
+		
 	
 	
+	pass
+
+
+## changes num_boids, changes max_boids and tex if necissary, updates relevant uniforms
+func _delete_boids():
+	
+	if(boids_to_delete == []):
+		return
+	
+	for i in boids_to_delete.size():
+		
+		_delete_boid(boids_to_delete[-1])
+		
+		if i + 1 >= max_deletions_per_frame:
+			break
+		
+		boids_to_delete.pop_back()
+		
+	
+	num_boids -= 1
 	
 	if num_boids <= 0:
 		num_boids = 1
 	
 	
+	
 	$boid_particles.amount = num_boids
 	
 	
+	queue_update_boid_colors()
+	queue_update_squad_bias_uniform()
+	squads_updated.emit()
 	pass
 
 func _delete_boid(to_delete:int):
+	
 	
 	num_boids -= 1
 	
@@ -674,7 +718,7 @@ func _delete_boid(to_delete:int):
 	
 	_swap_vals(squad_indeces, to_delete, num_boids)
 	_swap_vals(squad_biases, to_delete, num_boids)
-	_swap_vals(boid_colors, to_delete, num_boids)
+	#_swap_vals(boid_colors, to_delete, num_boids)
 	
 	
 	
@@ -683,9 +727,6 @@ func _delete_boid(to_delete:int):
 	
 	squads[to_delete_indeces.x].remove_boid(to_delete_indeces.y)
 	
-	
-	queue_update_boid_colors()
-	queue_update_squad_bias_uniform()
 	
 	
 	#remove_from_buffer.append(to_delete)
@@ -703,24 +744,31 @@ func _swap_vals(array: Variant, first:int, second:int):
 	array[second] = temp
 
 
-## perhaps do this over several frames?
-func _swap_buffer_vals():
+func _delete_boids_from_buffer():
 	
 	
-	if remove_from_buffer == []:
+	
+	if boids_to_delete == []:
 		return
 	
-	var last_index:int = num_boids + remove_from_buffer.size()
 	
+	
+	#var last_index:int = num_boids + (boids_to_delete.size() if boids_to_delete.size() < max_deletions_per_frame else max_deletions_per_frame)
+	var last_index:int = num_boids - 1
 	
 	var pos_swap:PackedVector2Array = rd.buffer_get_data(boid_pos_buffer).to_vector2_array()
 	var vel_swap:PackedVector2Array = rd.buffer_get_data(boid_vel_buffer).to_vector2_array()
+	var bias_swap:PackedVector2Array = rd.buffer_get_data(squad_bias_buffer).to_vector2_array()
 	
 	
-	for b in remove_from_buffer:
+	for i in boids_to_delete.size():
+		
+		var b = boids_to_delete[-(i +1)]
 		
 		
 		last_index -= 1
+		
+		#print(pos_swap[last_index])
 		
 		if b >= last_index:
 			continue
@@ -728,21 +776,27 @@ func _swap_buffer_vals():
 		
 		_swap_vals(pos_swap, b, last_index)
 		_swap_vals(vel_swap, b, last_index)
+		_swap_vals(bias_swap, b, last_index)
 		
+		#print(pos_swap[last_index])
+		
+		
+		if i + 1 >= max_deletions_per_frame:
+			break
 		
 		pass
 	
 	
 	var pos_bytes:PackedByteArray = pos_swap.to_byte_array()
 	var vel_bytes:PackedByteArray = vel_swap.to_byte_array()
+	var bias_bytes:PackedByteArray = bias_swap.to_byte_array()
 	
 	
 	rd.buffer_update(boid_pos_buffer, 0, pos_bytes.size(), pos_bytes)
 	rd.buffer_update(boid_vel_buffer, 0, vel_bytes.size(), vel_bytes)
+	rd.buffer_update(squad_bias_buffer, 0, bias_bytes.size(), bias_bytes)
 	
 	
-	
-	remove_from_buffer = []
 	
 	pass
 

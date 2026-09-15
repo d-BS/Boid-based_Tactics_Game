@@ -100,7 +100,7 @@ func _finalize_selection_gpu():
 		BOX_MODE.SELECT:
 			boid_manager.select_boids(to_select)
 		BOX_MODE.DELETE:
-			boid_manager.delete_boids(to_select)
+			boid_manager.queue_delete_boids(to_select)
 	
 	
 	boid_manager.squads_updated.emit()

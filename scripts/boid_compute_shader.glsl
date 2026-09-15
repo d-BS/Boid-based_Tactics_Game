@@ -230,9 +230,6 @@ void boid_physics_pass() {
 	imageStore(boid_data, pixel_pos, vec4(position.x, position.y, velocity.x, velocity.y));
 
 
-	
-
-
 }
 
 
@@ -289,6 +286,12 @@ void loop_over_bin(int bindex){
 	int to_check = bin_mat.data[bindex];
 
 	while(to_check != -1){
+
+		//kinda wish I had a better solution than this
+		if (to_check >= params.num_boids) {
+        	to_check = bin_next.data[to_check];
+        	continue;
+    	}
 
 		boid_loop_interior(to_check);
 		to_check = bin_next.data[to_check];

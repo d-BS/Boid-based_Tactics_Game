@@ -33,8 +33,19 @@ visibility_rect = Rect2(-1000, -1000, 2000, 2000)
 process_material = SubResource("ShaderMaterial_4sp5u")
 
 [node name="Camera2D" type="Camera2D" parent="." unique_id=1639589100]
+limit_enabled = false
+limit_left = -10500
+limit_top = -10500
+limit_right = 42000
+limit_bottom = 42000
+limit_smoothed = true
 position_smoothing_enabled = true
 position_smoothing_speed = 10.0
+drag_left_margin = 0.8
+drag_top_margin = 0.8
+drag_right_margin = 0.8
+drag_bottom_margin = 0.8
+editor_draw_drag_margin = true
 script = ExtResource("3_o08vg")
 
 [node name="Flag" type="Sprite2D" parent="." unique_id=1715478626 node_paths=PackedStringArray("boid_manager")]

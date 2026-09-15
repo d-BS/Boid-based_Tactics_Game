@@ -11,9 +11,8 @@
 
 ## Known issues:
 	
-	There are still a few kinks that need to be worked out with the GPU boids
-		-  Deletion broken
-	
+	sometimes squads choose nearly indistinguishable colors
+	Deletion unfinished
 	
 
 
