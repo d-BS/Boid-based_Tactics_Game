@@ -62,20 +62,6 @@ boid_manager = NodePath("../BoidCompute")
 
 [node name="UiLayer" type="CanvasLayer" parent="." unique_id=1935443301]
 
-[node name="SquadList" type="ItemList" parent="UiLayer" unique_id=1968125620 node_paths=PackedStringArray("boid_manager")]
-anchors_preset = -1
-anchor_left = 0.87700003
-anchor_right = 1.0
-anchor_bottom = 1.0
-offset_left = -0.8400879
-grow_horizontal = 0
-grow_vertical = 2
-size_flags_horizontal = 4
-size_flags_vertical = 4
-focus_mode = 0
-script = ExtResource("9_cpftq")
-boid_manager = NodePath("../../BoidCompute")
-
 [node name="OptionButton" type="OptionButton" parent="UiLayer" unique_id=1870982992 node_paths=PackedStringArray("selection_box")]
 offset_right = 40.0
 offset_bottom = 20.0
@@ -89,6 +75,28 @@ popup/item_1/id = 1
 script = ExtResource("10_k0nt5")
 selection_box = NodePath("../../SelectionBox")
 
-[connection signal="squads_updated" from="BoidCompute" to="UiLayer/SquadList" method="_on_squads_updated"]
-[connection signal="item_selected" from="UiLayer/SquadList" to="UiLayer/SquadList" method="_on_item_selected"]
+[node name="FoldableContainer" type="FoldableContainer" parent="UiLayer" unique_id=1158738097]
+anchors_preset = -1
+anchor_left = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -138.0
+offset_top = 50.0
+offset_bottom = -50.0
+grow_horizontal = 0
+grow_vertical = 2
+focus_neighbor_bottom = NodePath("SquadList")
+focus_mode = 0
+theme_override_font_sizes/font_size = 32
+title = "Squads"
+
+[node name="SquadList" type="ItemList" parent="UiLayer/FoldableContainer" unique_id=1968125620 node_paths=PackedStringArray("boid_manager")]
+layout_mode = 2
+focus_mode = 0
+theme_override_font_sizes/font_size = 26
+script = ExtResource("9_cpftq")
+boid_manager = NodePath("../../../BoidCompute")
+
+[connection signal="squads_updated" from="BoidCompute" to="UiLayer/FoldableContainer/SquadList" method="_on_squads_updated"]
 [connection signal="item_selected" from="UiLayer/OptionButton" to="UiLayer/OptionButton" method="_on_item_selected"]
+[connection signal="item_selected" from="UiLayer/FoldableContainer/SquadList" to="UiLayer/FoldableContainer/SquadList" method="_on_item_selected"]

@@ -1,4 +1,4 @@
-extends Node2D
+class_name BoidManager extends Node2D
 var DEBUG_LOG = false
 
 ## current number of boids
@@ -7,17 +7,14 @@ var num_boids:int = 250_000
 
 ## maximum boids that current setup can handle w/o reallocating stuff, 
 ## set to nearest multiple of 128
-var max_boids:int = num_boids + (0 if (num_boids % 128 == 0) else (128 - num_boids % 128))
+var max_boids:int
 
-
-@warning_ignore("integer_division")
-var num_workgroups:int = max_boids / 128
+var num_workgroups:int
 
 
 #TODO:
 #
 #
-#Have goal-less boids removed from squad structure overall?
 #
 #fix deletion wierdness or at least understand why its happening
 #
@@ -27,7 +24,7 @@ var num_workgroups:int = max_boids / 128
 #add more kinds of formations, remove hardcoding
 #have finer-tune control of formation during gameplay, add ui for this
 #
-#have camera limits automatically set to bin size of level
+#set camera limits automatically to bin size of level
 #
 #be able to create boids, have boids be killed, etc
 #create faction system for this - no friendly fire, etc
@@ -76,26 +73,28 @@ var bin_next_bytes:PackedByteArray
 ## contains positions of boids, and is actively updated
 var boid_pos_active:PackedVector4Array = []
 
-## Each unit's location within the squad structure
+## Each unit's location within the squad structure.
+## x: squad #, y: index within squad
 var squad_indeces:PackedVector2Array
 
-#list of squads
+## list of squads
 var squads:Array[Squad]
 
-#which squad is selected
+## which squad is selected
 var selection_squad:int = -1
 
-#lists which squads are empty
+## lists which squads are empty
 var empty_squads:Array[int] = []
 
 #textures that store information for particle shader
-var IMAGE_SIZE:int = int(ceil(sqrt(max_boids)))
+var IMAGE_SIZE:int
 var boid_data : Image
 var boid_data_texture : ImageTexture
 var boid_data_address : Texture2DRD
 var boid_colors_image : Image
 var boid_colors_texture : ImageTexture
 
+## contains which color each boid is
 var boid_colors:PackedColorArray
 
 
@@ -161,9 +160,26 @@ signal squads_updated
 
 func _ready():
 	
+	
 	#Engine.time_scale = 10
 	
 	#seed(0)
+	
+	
+	#first multiple of 128 after num_boids
+	max_boids = num_boids + (0 if (num_boids % 128 == 0) else (128 - num_boids % 128))
+	
+	
+	@warning_ignore("integer_division")
+	num_workgroups = max_boids / 128
+	
+	#smallest square which will hold max_boids
+	IMAGE_SIZE = int(ceil(sqrt(max_boids)))
+	
+	
+	
+	
+	
 	
 	boid_data = Image.create_empty(IMAGE_SIZE, IMAGE_SIZE, false, Image.FORMAT_RGBAF)
 	boid_data_texture = ImageTexture.create_from_image(boid_data)
@@ -217,8 +233,6 @@ func _ready():
 ## FIX LATER
 func _initial_boid_setup():
 	
-	var array_o_boids:Array[int]
-	array_o_boids.resize(num_boids)
 	boid_pos.resize(max_boids)
 	boid_vel.resize(max_boids)
 	squad_indeces.resize(max_boids)
@@ -226,28 +240,19 @@ func _initial_boid_setup():
 	for i in num_boids:
 		
 		boid_pos[i] = Vector2(randf() * IMAGE_SIZE * 50, randf()  * IMAGE_SIZE * 50)
-		boid_vel[i] = Vector2.ZERO#Vector2(randf_range(-1.0, 1.0) * max_vel, randf_range(-1.0, 1.0) * max_vel)
-		array_o_boids[i] = i
-		squad_indeces[i] = Vector2(0, i)
+		boid_vel[i] = Vector2.ZERO
+		squad_indeces[i] = Vector2(-1, i)
 	
 	
-	squads = [Squad.new([], 0)]
-	squads[0].boid_manager = self
-	squads[0].units = array_o_boids
+	squads = []
+	Squad.boid_manager = self
 
 
 func _process(delta):
 	
 	
 	
-	get_window().title = "Boids: " + str(num_boids) + " / FPS: " + str(Engine.get_frames_per_second())
-	
-	
-	
-	
-	
-	
-	
+	get_window().title = "Units: " + str(num_boids) + " / FPS: " + str(Engine.get_frames_per_second())
 	
 	
 	
@@ -344,7 +349,7 @@ func _update_data_texture():
 	
 	
 	
-	var start_time = Time.get_ticks_usec()
+	#var start_time = Time.get_ticks_usec()
 	
 	
 	var boid_data_image_data:PackedByteArray = rd.texture_get_data(boid_data_buffer, 0)
@@ -352,12 +357,12 @@ func _update_data_texture():
 	
 	
 	
-	var end_time = Time.get_ticks_usec()
-	var total_time = end_time - start_time
+	#var end_time = Time.get_ticks_usec()
+	#var total_time = end_time - start_time
 	
-	if(Engine.get_frames_drawn() % 100 == 0):
+	#if(Engine.get_frames_drawn() % 100 == 0):
 	#	print("Code took: ", total_time, " microseconds")
-		pass
+	#	pass
 	
 	
 	boid_data.set_data(IMAGE_SIZE, IMAGE_SIZE, false, Image.FORMAT_RGBAF, boid_data_image_data)
@@ -499,13 +504,6 @@ func _exit_tree():
 	if bin_next_buffer.is_valid():
 		rd.free_rid(bin_next_buffer)
 	
-	#DANGER these two doesn't like being freed
-	if uniform_set_0.is_valid():
-		rd.free_rid(uniform_set_0)
-		pass
-	if uniform_set_1.is_valid():
-		rd.free_rid(uniform_set_1)
-		pass
 	
 	
 	rd.free()
@@ -546,13 +544,12 @@ func select_boids(new_selection:Array[int]):
 		
 		var squad_getting_removed_from:int = int(squad_indeces[b].x)
 		
+		if squad_getting_removed_from == -1:
+			continue
+		
 		#removes b from current squad
 		squads[squad_getting_removed_from].remove_boid(int(squad_indeces[b].y))
 		
-		#if b's squad is now empty, adds to empty_squads
-		if squads[squad_getting_removed_from].units.is_empty():
-			empty_squads.insert(empty_squads.bsearch(squad_getting_removed_from), squad_getting_removed_from)
-			
 		
 	
 	
@@ -713,23 +710,33 @@ func _delete_boid(to_delete:int):
 	num_boids -= 1
 	
 	
+	#suppose todelete = 4,
+	#and there are a total of 16 boids.
+	#
+	#num_boids - 1 = 16
+	#
+	
 	var to_delete_indeces:Vector2i = squad_indeces[to_delete]
 	var last_active_indeces:Vector2i = squad_indeces[num_boids]
 	
 	_swap_vals(squad_indeces, to_delete, num_boids)
 	_swap_vals(squad_biases, to_delete, num_boids)
-	#_swap_vals(boid_colors, to_delete, num_boids)
+	_swap_vals(boid_colors, to_delete, num_boids)
+	
+	
+	if last_active_indeces.x != -1:
+		squads[last_active_indeces.x].units[last_active_indeces.y] = to_delete
+	
+	if to_delete_indeces.x != -1:
+		squads[to_delete_indeces.x].units[to_delete_indeces.y] = num_boids
+		squads[to_delete_indeces.x].remove_boid(to_delete_indeces.y)
 	
 	
 	
-	squads[last_active_indeces.x].units[last_active_indeces.y] = to_delete
-	squads[to_delete_indeces.x].units[to_delete_indeces.y] = num_boids
-	
-	squads[to_delete_indeces.x].remove_boid(to_delete_indeces.y)
 	
 	
+	#this sets an index to 0,0!!!
 	
-	#remove_from_buffer.append(to_delete)
 	
 	pass
 
@@ -752,13 +759,11 @@ func _delete_boids_from_buffer():
 		return
 	
 	
-	
-	#var last_index:int = num_boids + (boids_to_delete.size() if boids_to_delete.size() < max_deletions_per_frame else max_deletions_per_frame)
 	var last_index:int = num_boids - 1
 	
 	var pos_swap:PackedVector2Array = rd.buffer_get_data(boid_pos_buffer).to_vector2_array()
 	var vel_swap:PackedVector2Array = rd.buffer_get_data(boid_vel_buffer).to_vector2_array()
-	var bias_swap:PackedVector2Array = rd.buffer_get_data(squad_bias_buffer).to_vector2_array()
+	#var bias_swap:PackedVector2Array = rd.buffer_get_data(squad_bias_buffer).to_vector2_array()
 	
 	
 	for i in boids_to_delete.size():
@@ -768,7 +773,6 @@ func _delete_boids_from_buffer():
 		
 		last_index -= 1
 		
-		#print(pos_swap[last_index])
 		
 		if b >= last_index:
 			continue
@@ -776,9 +780,8 @@ func _delete_boids_from_buffer():
 		
 		_swap_vals(pos_swap, b, last_index)
 		_swap_vals(vel_swap, b, last_index)
-		_swap_vals(bias_swap, b, last_index)
+		#_swap_vals(bias_swap, b, last_index)
 		
-		#print(pos_swap[last_index])
 		
 		
 		if i + 1 >= max_deletions_per_frame:
@@ -789,12 +792,12 @@ func _delete_boids_from_buffer():
 	
 	var pos_bytes:PackedByteArray = pos_swap.to_byte_array()
 	var vel_bytes:PackedByteArray = vel_swap.to_byte_array()
-	var bias_bytes:PackedByteArray = bias_swap.to_byte_array()
+	#var bias_bytes:PackedByteArray = bias_swap.to_byte_array()
 	
 	
 	rd.buffer_update(boid_pos_buffer, 0, pos_bytes.size(), pos_bytes)
 	rd.buffer_update(boid_vel_buffer, 0, vel_bytes.size(), vel_bytes)
-	rd.buffer_update(squad_bias_buffer, 0, bias_bytes.size(), bias_bytes)
+	#rd.buffer_update(squad_bias_buffer, 0, bias_bytes.size(), bias_bytes)
 	
 	
 	

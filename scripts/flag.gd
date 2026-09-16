@@ -1,6 +1,6 @@
 extends Sprite2D
 
-@export var boid_manager:Node
+@export var boid_manager:BoidManager
 
 # Called when the node enters the scene tree for the first time.
 func _ready() -> void:
@@ -32,7 +32,16 @@ func _process(_delta: float) -> void:
 		
 		#boid_manager.free()
 		
-		get_tree().reload_current_scene()
+		var next_scene:PackedScene = load("res://scenes/main_menu.tscn")
+		var scene_instance = next_scene.instantiate()
+		
+		get_tree().root.get_child(0).queue_free()
+		
+		get_tree().root.add_child(scene_instance)
+		get_tree().current_scene = scene_instance
+	
+		
+		
 	
 	pass
 

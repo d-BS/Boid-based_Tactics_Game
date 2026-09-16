@@ -11,7 +11,7 @@ config_version=5
 [application]
 
 config/name="lilGuys"
-run/main_scene="uid://5rmmflo7fnbi"
+run/main_scene="uid://5r6j8l65t88q"
 config/features=PackedStringArray("4.7", "GL Compatibility")
 config/icon="res://icon.svg"
 
@@ -80,4 +80,5 @@ shift={
 textures/canvas_textures/default_texture_filter=0
 rendering_device/driver.windows="d3d12"
 renderer/rendering_method="mobile"
+textures/vram_compression/import_etc2_astc=true
 anti_aliasing/screen_space_roughness_limiter/enabled=false

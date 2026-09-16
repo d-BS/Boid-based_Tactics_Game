@@ -1,6 +1,6 @@
 extends ItemList
 
-@export var boid_manager:Node2D
+@export var boid_manager:BoidManager
 
 # Called when the node enters the scene tree for the first time.
 func _ready() -> void:
@@ -34,10 +34,14 @@ func _on_squads_updated() -> void:
 		
 		add_item(str("Squad ", iterator + 1, ", ", s.units.size(), " units"))
 		
-		
 		iterator += 1
 		
 		pass
+	
+	if(boid_manager.selection_squad == -1):
+		deselect_all()
+	else:
+		select(boid_manager.selection_squad)
 	
 	pass # Replace with function body.
 

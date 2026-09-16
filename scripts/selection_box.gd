@@ -5,7 +5,7 @@ var selectionRect:Rect2
 @export var mode:BOX_MODE = BOX_MODE.SELECT
 enum BOX_MODE {SELECT, DELETE}
 
-@export var boid_manager:Node
+@export var boid_manager:BoidManager
 
 # Called when the node enters the scene tree for the first time.
 func _ready() -> void:

@@ -1,6 +1,6 @@
 class_name Squad
 
-static var boid_manager:Node2D
+static var boid_manager:BoidManager
 
 var units: PackedInt32Array
 
@@ -48,7 +48,7 @@ func remove_boid(index:int):
 	
 	
 	boid_manager.squad_biases[units[index]] = Vector2.INF
-	boid_manager.squad_indeces[units[index]] = Vector2.ZERO
+	boid_manager.squad_indeces[units[index]] = -Vector2.ONE
 	
 	#should swap toremove w back
 	units[index] = units[units.size() - 1]
@@ -57,6 +57,8 @@ func remove_boid(index:int):
 	units.resize(units.size() - 1)
 	
 	if(units.is_empty()):
+		
+		boid_manager.empty_squads.insert(boid_manager.empty_squads.bsearch(squad_id), squad_id)
 		num_of_squads -= 1
 	
 	pass
