@@ -8,7 +8,6 @@ var num_boids:int = 250_000
 ## maximum boids that current setup can handle w/o reallocating stuff, 
 ## set to nearest multiple of 128
 var max_boids:int
-
 var num_workgroups:int
 
 
@@ -58,6 +57,17 @@ var num_workgroups:int
 var boid_pos:PackedVector2Array = []
 var boid_vel:PackedVector2Array = []
 var squad_biases:PackedVector2Array = []
+
+
+#health
+#attack
+#mass
+#move damping here
+#deletion_queue
+
+#elemental alignment
+
+
 
 var bin_dims:Vector2 = Vector2(1500, 1500)
 var bin_offset:Vector2 = -bin_dims * 35 / 5
@@ -689,7 +699,9 @@ func _delete_boids():
 		boids_to_delete.pop_back()
 		
 	
-	num_boids -= 1
+	if boids_to_delete == []:
+		#num_boids -= 1
+		pass
 	
 	if num_boids <= 0:
 		num_boids = 1
@@ -707,14 +719,20 @@ func _delete_boids():
 func _delete_boid(to_delete:int):
 	
 	
+	
 	num_boids -= 1
 	
+	
+	#print("cpu last index: ", num_boids)
+	#print("cpu to_delete:  ", to_delete)
 	
 	#suppose todelete = 4,
 	#and there are a total of 16 boids.
 	#
 	#num_boids - 1 = 16
 	#
+	
+	
 	
 	var to_delete_indeces:Vector2i = squad_indeces[to_delete]
 	var last_active_indeces:Vector2i = squad_indeces[num_boids]
@@ -730,6 +748,7 @@ func _delete_boid(to_delete:int):
 	if to_delete_indeces.x != -1:
 		squads[to_delete_indeces.x].units[to_delete_indeces.y] = num_boids
 		squads[to_delete_indeces.x].remove_boid(to_delete_indeces.y)
+	
 	
 	
 	
@@ -761,6 +780,7 @@ func _delete_boids_from_buffer():
 	
 	var last_index:int = num_boids - 1
 	
+	
 	var pos_swap:PackedVector2Array = rd.buffer_get_data(boid_pos_buffer).to_vector2_array()
 	var vel_swap:PackedVector2Array = rd.buffer_get_data(boid_vel_buffer).to_vector2_array()
 	#var bias_swap:PackedVector2Array = rd.buffer_get_data(squad_bias_buffer).to_vector2_array()
@@ -770,11 +790,12 @@ func _delete_boids_from_buffer():
 		
 		var b = boids_to_delete[-(i +1)]
 		
-		
-		last_index -= 1
+		#print("gpu last index: ", last_index)
+		#print("gpu to_delete : ", b)
 		
 		
 		if b >= last_index:
+			last_index -= 1
 			continue
 		
 		
@@ -786,6 +807,8 @@ func _delete_boids_from_buffer():
 		
 		if i + 1 >= max_deletions_per_frame:
 			break
+		
+		last_index -= 1
 		
 		pass
 	
